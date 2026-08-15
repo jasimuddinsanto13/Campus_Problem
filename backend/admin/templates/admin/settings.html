@@ -1,0 +1,184 @@
+{% extends 'portal_base.html' %}
+{% load static %}
+{% block title %}Settings | Admin portal | Campus Problem{% endblock %}
+{% block workspace_label %}ADMIN PORTAL{% endblock %}
+{% block nav %}
+  <a class="nav-item" href="/"><span class="nav-icon">&#9673;</span>My dashboard</a>
+  <a class="nav-item" href="{% url 'admin_portal:admin_users' %}"><span class="nav-icon">&#128101;</span>Users</a>
+  <a class="nav-item" href="{% url 'admin_portal:admin_routines' %}"><span class="nav-icon">&#9200;</span>Routines</a>
+  <a class="nav-item" href="/issues/"><span class="nav-icon">&#9632;</span>Issue desk</a>
+  <a class="nav-item" href="/booking/"><span class="nav-icon">&#128205;</span>Room booking</a>
+  <a class="nav-item active" href="{% url 'admin_portal:settings' %}"><span class="nav-icon">&#9881;</span>Settings</a>
+{% endblock %}
+{% block crumbs %}<span>Admin portal</span><span>/</span><strong>Settings</strong>{% endblock %}
+
+{% block content %}
+  <section class="page-heading dash-heading">
+    <div>
+      <p class="eyebrow">ACCOUNT SETTINGS</p>
+      <h1>Your profile,<br><em>in one place.</em></h1>
+      <p class="subhead">Update your personal details and photo, or change your password to keep the account secure.</p>
+    </div>
+    <span class="count-chip">{{ user.get_role_display }} account</span>
+  </section>
+
+  <style>
+    .errorlist { margin: 6px 0 0; padding: 0; list-style: none; color: #b55240; font-size: 10px; line-height: 1.5; }
+    .profile-photo { display: grid; width: 72px; height: 72px; flex: none; place-items: center; border-radius: 50%; overflow: hidden; color: #fff; background: var(--ink); font-family: var(--mono); font-size: 16px; font-weight: 700; }
+    .profile-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-remove-note { color: #b55240; font-size: 10px; }
+    .settings-submit { align-self: flex-start; margin-top: 20px; }
+    .settings-submit .admin-btn-approve { padding: 11px 20px; font-size: 11px; }
+  </style>
+
+  <section class="dash-profile-grid">
+    <!-- Profile information -->
+    <article class="dash-card">
+      <p class="mini-label">PROFILE INFORMATION</p>
+      <div class="dash-profile-head">
+        {% if user.profile_picture %}
+          <span class="profile-photo"><img id="photo-preview" src="{{ user.profile_picture.url }}" alt="Profile photo"></span>
+        {% else %}
+          <span class="profile-photo" id="photo-preview">{{ user.first_name|slice:":2"|upper|default:user.username|slice:":2" }}</span>
+        {% endif %}
+        <div>
+          <h2>{{ user.first_name|default:user.username }}</h2>
+          <p>{{ user.get_role_display }} &middot; {{ user.campus_id|default:"—" }}</p>
+        </div>
+      </div>
+
+      <form method="post" enctype="multipart/form-data" class="auth-form">
+        {% csrf_token %}
+        <input type="hidden" name="profile_submit" value="1">
+
+        <div class="form-grid">
+          <label class="auth-field">
+            <span class="auth-label">First name</span>
+            <input type="text" name="first_name" value="{{ profile_form.first_name.value|default:'' }}" maxlength="150" class="auth-input">
+            {{ profile_form.first_name.errors }}
+          </label>
+          <label class="auth-field">
+            <span class="auth-label">Last name</span>
+            <input type="text" name="last_name" value="{{ profile_form.last_name.value|default:'' }}" maxlength="150" class="auth-input">
+            {{ profile_form.last_name.errors }}
+          </label>
+        </div>
+
+        <label class="auth-field">
+          <span class="auth-label">Email address</span>
+          <input type="email" name="email" value="{{ profile_form.email.value|default:'' }}" required class="auth-input">
+          {{ profile_form.email.errors }}
+        </label>
+
+        <label class="auth-field">
+          <span class="auth-label">Profile picture</span>
+          <input type="file" name="profile_picture" id="id_profile_picture" accept="image/*" class="auth-input">
+          <span class="auth-field-note">PNG or JPG. The photo is stored in your account and shown on the dashboard.</span>
+          {{ profile_form.profile_picture.errors }}
+        </label>
+
+        {% if user.profile_picture %}
+          <label class="auth-field">
+            <span class="auth-input-optional" style="display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted);">
+              <input type="checkbox" name="remove_photo" id="id_remove_photo" style="width:auto;">
+              <span>Remove current photo <span class="photo-remove-note" id="photo-remove-note" hidden>(will be deleted on save)</span></span>
+            </span>
+          </label>
+        {% endif %}
+
+        <button type="submit" class="settings-submit"><span class="admin-btn admin-btn-approve">Save profile</span></button>
+      </form>
+    </article>
+
+    <!-- Change password -->
+    <article class="dash-card">
+      <p class="mini-label">SECURITY</p>
+      <div class="dash-profile-head">
+        <span class="profile-photo">&#128274;</span>
+        <div>
+          <h2>Change password</h2>
+          <p>Use a strong password you don't use elsewhere.</p>
+        </div>
+      </div>
+
+      <form method="post" class="auth-form" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="password_submit" value="1">
+
+        <label class="auth-field">
+          <span class="auth-label">Current password</span>
+          <input type="password" name="old_password" id="id_old_password" required autocomplete="current-password" class="auth-input">
+          {{ password_form.old_password.errors }}
+        </label>
+
+        <label class="auth-field">
+          <span class="auth-label">New password</span>
+          <input type="password" name="new_password1" id="id_new_password1" required autocomplete="new-password" class="auth-input">
+          <span class="auth-field-note">At least 8 characters, not too similar to your personal info.</span>
+          {{ password_form.new_password1.errors }}
+        </label>
+
+        <label class="auth-field">
+          <span class="auth-label">Confirm new password</span>
+          <input type="password" name="new_password2" id="id_new_password2" required autocomplete="new-password" class="auth-input">
+          <span class="auth-field-note" id="password-match-note"></span>
+          {{ password_form.new_password2.errors }}
+        </label>
+
+        <button type="submit" class="settings-submit"><span class="admin-btn admin-btn-approve">Update password</span></button>
+      </form>
+    </article>
+  </section>
+
+  <script>
+    (function () {
+      // Live preview for the uploaded profile picture
+      var fileInput = document.getElementById('id_profile_picture');
+      var preview = document.getElementById('photo-preview');
+      if (fileInput && preview) {
+        fileInput.addEventListener('change', function () {
+          var file = fileInput.files && fileInput.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            var img = document.createElement('img');
+            img.src = e.target.result;
+            preview.replaceWith(img);
+            preview = img;
+            preview.id = 'photo-preview';
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // Removing the photo hides the preview
+      var removeBox = document.getElementById('id_remove_photo');
+      var removeNote = document.getElementById('photo-remove-note');
+      if (removeBox && removeNote) {
+        removeBox.addEventListener('change', function () {
+          removeNote.hidden = !removeBox.checked;
+        });
+      }
+
+      // Frontend password match validation
+      var p1 = document.getElementById('id_new_password1');
+      var p2 = document.getElementById('id_new_password2');
+      var note = document.getElementById('password-match-note');
+      if (p1 && p2 && note) {
+        var check = function () {
+          if (!p2.value) {
+            note.textContent = '';
+            p2.style.borderColor = '';
+            return;
+          }
+          var matches = p1.value === p2.value;
+          note.textContent = matches ? 'Passwords match.' : 'Passwords do not match.';
+          note.className = 'auth-field-note ' + (matches ? 'note-ok' : 'note-bad');
+          p2.style.borderColor = matches ? '' : 'var(--coral)';
+        };
+        p1.addEventListener('input', check);
+        p2.addEventListener('input', check);
+      }
+    })();
+  </script>
+{% endblock %}

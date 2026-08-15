@@ -1,0 +1,83 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NITER-Pulse | Room booking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'style.css' %}">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/booking/" aria-label="NITER-Pulse home">
+        <span class="brand-mark pulse-mark">NP</span>
+        <span>NITER-<br><strong>Pulse</strong></span>
+      </a>
+      <div class="workspace-label">CAMPUS OPERATIONS</div>
+      <nav class="nav-list" aria-label="Main navigation">
+        <a class="nav-item" href="{% url 'home' %}"><span class="nav-icon">&#9673;</span>My dashboard</a>
+        <a class="nav-item" href="/issues/"><span class="nav-icon">&#9632;</span>Issue desk</a>
+        <a class="nav-item active" href="/booking/"><span class="nav-icon">&#128205;</span>Room booking</a>
+        <a class="nav-item" href="/booking/#insights"><span class="nav-icon">&#9783;</span>Insights</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="pulse-card">
+          <span class="pulse-dot"></span>
+          <div><strong>Rooms tracked</strong><small>{{ rooms_count }} classrooms online</small></div>
+        </div>
+        <a class="account" href="#account"><span class="avatar">{{ user_name|slice:":2"|upper }}</span><span><strong>{{ user_name }}</strong><small>{{ user_role }} · {{ user_dept }}</small></span><span class="more">&#8942;</span></a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="crumbs"><span>Campus operations</span><span>/</span><strong>Room booking</strong></div>
+        <div class="top-actions"><button class="icon-button" title="Notifications" aria-label="Notifications">&#9678;<span class="notification-dot"></span></button><button class="help-button">Need help? <span>&rarr;</span></button><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="logout-button" title="Log out"><span class="out-arrow">&#8614;</span><span class="logout-label">Log out</span></button></form></div>
+      </header>
+
+      <section class="page-heading" id="insights">
+        <div><p class="eyebrow" id="today-label"></p><h1>Find a room.<br><em>Lock it in.</em></h1><p class="subhead">See every classroom that is free right now — and exactly how long it stays that way.</p></div>
+        <div class="booking-actions">
+          <label class="date-picker">DATE<input id="booking-date" type="date"></label>
+          <button class="report-button" id="refresh-rooms"><span>&#8635;</span> Check availability</button>
+        </div>
+      </section>
+
+      <section class="window-bar" aria-label="Time window">
+        <label>FROM<select id="start-time"><option value="08:00">08:00</option><option value="09:00" selected>09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option></select></label>
+        <span class="window-arrow">&rarr;</span>
+        <label>UNTIL<select id="end-time"><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:30" selected>11:30</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option></select></label>
+        <span class="window-hint" id="window-hint">Free window you need</span>
+      </section>
+
+      <section class="room-section">
+        <div class="section-header"><div><h2>Available rooms</h2><p id="rooms-sub">Checking live availability…</p></div><span class="count-chip" id="free-count">—</span></div>
+        <div class="room-grid" id="room-grid" aria-live="polite">
+          <div class="room-card skeleton"></div><div class="room-card skeleton"></div><div class="room-card skeleton"></div><div class="room-card skeleton"></div>
+        </div>
+      </section>
+
+      <section class="bookings-section">
+        <div class="section-header"><div><h2>Bookings for the day</h2><p>Rooms locked for exams, makeups and extra classes.</p></div></div>
+        <div class="booking-list" id="booking-list"></div>
+        <div class="empty-state" id="booking-empty" hidden>No bookings yet for this date.</div>
+      </section>
+
+      <section class="bottom-band" id="activity"><div><span class="mini-label">SMART CLASSROOM DISCOVERY</span><h2>No more walking<br><em>room to room.</em></h2></div><div class="band-copy"><p>Every booking locks the room centrally, so the public board always shows the truth. Students can even suggest a free slot to their teacher.</p><a href="/booking/#insights">Back to top <span>&rarr;</span></a></div></section>
+    </main>
+  </div>
+
+  <dialog id="book-dialog" class="report-dialog"><form method="dialog" id="book-form"><div class="dialog-head"><div><span class="mini-label">CONFIRM BOOKING</span><h2 id="book-room-name">Reserve room</h2></div><button class="close-button" value="cancel" aria-label="Close">&times;</button></div><p class="book-window" id="book-window"></p><label>Booking type<select name="booking_type"><option value="exam">Examination</option><option value="extra_class">Extra class</option><option value="reschedule">Rescheduled class</option></select></label><div class="form-grid"><label>Department<input name="department" required maxlength="50" placeholder="e.g. CSE"></label><label>Batch / section<input name="batch_section" required maxlength="50" placeholder="e.g. 13th Batch, 2A"></label></div><div class="dialog-actions"><button class="cancel-button" value="cancel">Cancel</button><button class="submit-button" value="default">Lock it in <span>&rarr;</span></button></div><p class="form-feedback" id="book-feedback" role="status"></p></form></dialog>
+  <script>
+    // Match the FastAPI host to the host the user is actually browsing, so the
+    // Django sessionid cookie (host-scoped) always reaches the booking API.
+    window.API_BASE = 'http://' + window.location.hostname + ':8001';
+    window.CAN_BOOK = {{ can_book|yesno:"true,false" }};
+    window.BOOKER_ID = {{ booker_id }};
+  </script>
+  <script src="{% static 'booking.js' %}"></script>
+</body>
+</html>

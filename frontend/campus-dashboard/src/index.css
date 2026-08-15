@@ -1,0 +1,103 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-lime: #c6ff00;
+  --color-lime-soft: #a3e635;
+  --color-lime-deep: #4d7c0f;
+  --color-charcoal: #1a1a1a;
+  --color-ink: #1a1a1a; /* always-dark surface color (buttons, modal headers) */
+  --color-canvas: #f8f9f3;
+  --color-card: #ffffff;
+  --color-panel: #f8f9fa;
+  --color-coral: #ff6b5e;
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  color: var(--color-charcoal);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes spinOnce {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Dark mode — flipped palette under html.dark.
+
+   Tailwind v4 resolves every color utility through a CSS variable, so
+   re-declaring the palette here turns the whole app dark with one switch
+   (bg-white -> cards, text-charcoal -> ink text, gray scale inverted, etc.).
+   --color-ink is NOT flipped: it is the always-dark surface behind buttons,
+   modal headers and avatars. A couple of targeted fixes keep lime buttons and
+   soft chips readable on dark surfaces.
+   ------------------------------------------------------------------------- */
+html.dark {
+  color-scheme: dark;
+  --color-canvas: #0d0f13;
+  --color-card: #14171d;
+  --color-panel: #1a1e26;
+  --color-white: #14171d;
+  --color-charcoal: #e8ebf1;
+  --color-lime-deep: #a3e635;
+  --color-gray-50: #151920;
+  --color-gray-100: #1b2029;
+  --color-gray-200: #252c37;
+  --color-gray-300: #39414f;
+  --color-gray-400: #68748a;
+  --color-gray-500: #8d97a9;
+  --color-gray-600: #aab4c4;
+  --color-gray-700: #c6ced9;
+  --color-gray-800: #dde3ea;
+  --color-gray-900: #eef1f5;
+}
+
+/* Lime buttons keep dark ink text on bright lime in dark mode. */
+html.dark .bg-lime.text-charcoal {
+  color: #14171d;
+}
+
+/* Soft charcoal-tint chips become a light hairline tint on dark surfaces. */
+html.dark .bg-ink\/5 {
+  background-color: rgb(232 235 241 / 0.07);
+}
+html.dark .bg-ink\/\[0\.03\] {
+  background-color: rgb(232 235 241 / 0.04);
+}

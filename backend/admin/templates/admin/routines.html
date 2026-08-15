@@ -1,0 +1,260 @@
+{% extends 'portal_base.html' %}
+{% load static %}
+{% block title %}Routines | Admin portal | Campus Problem{% endblock %}
+{% block workspace_label %}ADMIN PORTAL{% endblock %}
+{% block nav %}
+  <a class="nav-item" href="/"><span class="nav-icon">&#9673;</span>My dashboard</a>
+  <a class="nav-item" href="{% url 'admin_portal:admin_users' %}"><span class="nav-icon">&#128101;</span>Users</a>
+  <a class="nav-item active" href="{% url 'admin_portal:admin_routines' %}"><span class="nav-icon">&#9200;</span>Routines</a>
+  <a class="nav-item" href="/issues/"><span class="nav-icon">&#9632;</span>Issue desk</a>
+  <a class="nav-item" href="/booking/"><span class="nav-icon">&#128205;</span>Room booking</a>
+  <a class="nav-item" href="{% url 'admin_portal:settings' %}"><span class="nav-icon">&#9881;</span>Settings</a>
+{% endblock %}
+{% block crumbs %}<span>Admin portal</span><span>/</span><strong>Routine setup</strong>{% endblock %}
+
+{% block content %}
+  <section class="page-heading dash-heading">
+    <div>
+      <p class="eyebrow">MASTER ROUTINE</p>
+      <h1>Set the baseline.<br><em>Fill the week.</em></h1>
+      <p class="subhead">Saving a routine locks those rooms for those windows — they stop appearing free in the availability search.</p>
+    </div>
+    <span class="count-chip">{{ routines_count }} routines on file</span>
+  </section>
+
+  <section class="admin-card">
+    <header class="admin-card-head">
+      <div>
+        <p class="mini-label">ROUTINE SETUP &amp; ENTRY</p>
+        <h2>Weekly timetable — Sunday to Thursday</h2>
+        <p class="admin-card-sub">Choose the department, batch and subject, then fill the classes for each day.</p>
+      </div>
+    </header>
+
+    <form method="post" action="{% url 'admin_portal:admin_routines' %}" class="routine-form">
+      {% csrf_token %}
+      <div class="routine-cascade" role="group" aria-label="Routine scope">
+        <div class="routine-step">
+          <label class="auth-label"><span class="routine-step-badge">1</span> Batch
+            <select class="auth-input" name="batch" id="cascade-batch">
+              <option value="">— All batches —</option>
+              {% for batch, _ in batch_tree.items %}
+              <option value="{{ batch }}">{{ batch }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <span class="cascade-arrow" aria-hidden="true">&rarr;</span>
+        <div class="routine-step">
+          <label class="auth-label"><span class="routine-step-badge">2</span> Department
+            <select class="auth-input" name="department" id="cascade-dept" required>
+              <option value="">Select department…</option>
+            </select>
+          </label>
+        </div>
+        <span class="cascade-arrow" aria-hidden="true">&rarr;</span>
+        <div class="routine-step">
+          <label class="auth-label"><span class="routine-step-badge">3</span> Section
+            <select class="auth-input" name="section" id="cascade-section">
+              <option value="">Select section…</option>
+            </select>
+          </label>
+        </div>
+        <label class="auth-label routine-subject">Subject name
+          <input class="auth-input" type="text" name="subject" list="subject-list" placeholder="e.g. Data Structures" required>
+        </label>
+      </div>
+      <p class="routine-combo" id="routine-combo" role="status">Select batch → department → section.</p>
+
+      <div class="routine-grid" role="table" aria-label="Weekly routine entry grid">
+        <div class="routine-row routine-head" role="row">
+          <span role="columnheader">Day</span>
+          <span role="columnheader">Time slot</span>
+          <span role="columnheader">Course name</span>
+          <span role="columnheader">Teacher name</span>
+          <span role="columnheader">Room</span>
+        </div>
+        {% for day, label in routine_days %}
+          <div class="routine-row" role="row">
+            <span class="routine-day" role="cell"><strong>{{ label }}</strong></span>
+            <span class="routine-time" role="cell">
+              <input class="auth-input routine-time-input" type="time" name="{{ day }}_start" value="09:00" aria-label="{{ label }} start time">
+              <span class="window-arrow">&rarr;</span>
+              <input class="auth-input routine-time-input" type="time" name="{{ day }}_end" value="10:30" aria-label="{{ label }} end time">
+            </span>
+            <span role="cell"><input class="auth-input" type="text" name="{{ day }}_course" placeholder="e.g. CSE-101 (Data Structures)"></span>
+            <span role="cell">
+              <select class="auth-input" name="{{ day }}_teacher" aria-label="{{ label }} teacher">
+                <option value="">— Teacher —</option>
+                {% for teacher in teachers %}
+                  <option value="{{ teacher.id }}" data-dept="{{ teacher.department }}">{{ teacher.first_name }} {{ teacher.last_name }} · {{ teacher.department|default:"—" }}</option>
+                {% endfor %}
+              </select>
+            </span>
+            <span role="cell">
+              <select class="auth-input" name="{{ day }}_room" aria-label="{{ label }} room">
+                <option value="">— Room —</option>
+                {% for room in rooms %}
+                  <option value="{{ room.id }}">{{ room.room_number }} · {{ room.building }} ({{ room.capacity }})</option>
+                {% endfor %}
+              </select>
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="routine-submit">
+        <button type="submit" class="admin-btn admin-btn-approve">Save routine <span>&rarr;</span></button>
+        <p class="admin-card-sub">Empty rows are skipped. Filled rows become recurring weekly classes.</p>
+      </div>
+    </form>
+
+    <datalist id="subject-list">{% for subject in subjects %}<option value="{{ subject }}"></option>{% endfor %}</datalist>
+
+    {{ batch_tree|json_script:"routine-tree" }}
+    <script>
+      (function () {
+        'use strict';
+        var TREE = JSON.parse(document.getElementById('routine-tree').textContent);
+        var batchSel = document.getElementById('cascade-batch');
+        var deptSel = document.getElementById('cascade-dept');
+        var sectionSel = document.getElementById('cascade-section');
+        var combo = document.getElementById('routine-combo');
+        var teacherSelects = document.querySelectorAll('select[name$="_teacher"]');
+
+        function departments() {
+          // { department: [sections] } for the chosen batch ('' = all batches).
+          var chosen = batchSel.value;
+          var out = {};
+          Object.keys(TREE).forEach(function (batch) {
+            if (chosen && batch !== chosen) return;
+            Object.keys(TREE[batch]).forEach(function (dept) {
+              out[dept] = (out[dept] || []).concat(TREE[batch][dept]);
+            });
+          });
+          return out;
+        }
+
+        function uniqueSorted(items) {
+          return Array.from(new Set(items)).sort();
+        }
+
+        function fillSelect(sel, values, emptyLabel) {
+          var prev = sel.value;
+          sel.innerHTML = '<option value="">' + emptyLabel + '</option>';
+          values.forEach(function (value) {
+            var opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = value;
+            sel.appendChild(opt);
+          });
+          if (values.indexOf(prev) !== -1) sel.value = prev;
+        }
+
+        function refreshDepartments() {
+          fillSelect(deptSel, Object.keys(departments()).sort(), 'Select department…');
+          refreshSections();
+        }
+
+        function refreshSections() {
+          var dept = deptSel.value;
+          var sections = dept ? uniqueSorted(departments()[dept] || []) : [];
+          var label = dept ? (sections.length ? 'Select section…' : 'No sections') : 'Select section…';
+          fillSelect(sectionSel, sections, label);
+        }
+
+        function refreshTeachers() {
+          var dept = deptSel.value;
+          teacherSelects.forEach(function (sel) {
+            Array.prototype.forEach.call(sel.options, function (opt) {
+              if (!opt.value) return; // keep the "— Teacher —" placeholder
+              opt.hidden = !!(dept && opt.getAttribute('data-dept') !== dept);
+            });
+          });
+        }
+
+        function updateCombo() {
+          var parts = [];
+          if (batchSel.value) parts.push(batchSel.value);
+          if (deptSel.value) parts.push(deptSel.value);
+          if (sectionSel.value) parts.push('Section ' + sectionSel.value);
+          if (parts.length >= 2) {
+            combo.textContent = 'Adding routine for: ' + parts.join(' · ');
+            combo.classList.add('routine-combo-ready');
+          } else {
+            combo.textContent = 'Select batch → department → section.';
+            combo.classList.remove('routine-combo-ready');
+          }
+        }
+
+        batchSel.addEventListener('change', function () {
+          deptSel.value = '';
+          sectionSel.value = '';
+          refreshDepartments();
+          refreshTeachers();
+          updateCombo();
+        });
+        deptSel.addEventListener('change', function () {
+          sectionSel.value = '';
+          refreshSections();
+          refreshTeachers();
+          updateCombo();
+        });
+        sectionSel.addEventListener('change', updateCombo);
+
+        refreshDepartments();
+        refreshTeachers();
+        updateCombo();
+      })();
+    </script>
+  </section>
+
+  <section class="admin-card admin-card-table" aria-label="Saved routines">
+    <header class="admin-card-head">
+      <div>
+        <p class="mini-label">ON FILE</p>
+        <h2>Saved routines</h2>
+        <p class="admin-card-sub">These entries are the baseline occupancy for the availability search.</p>
+      </div>
+      <span class="admin-count-badge">{{ routines_count }} entries</span>
+    </header>
+
+    {% if routines %}
+      <div class="admin-table routine-table" role="table" aria-label="Saved routines">
+        <div class="admin-table-row admin-table-head" role="row">
+          <span role="columnheader">Day</span>
+          <span role="columnheader">Time</span>
+          <span role="columnheader">Course</span>
+          <span role="columnheader">Department</span>
+          <span role="columnheader">Batch / Sec</span>
+          <span role="columnheader">Room</span>
+          <span role="columnheader">Teacher</span>
+          <span role="columnheader" class="admin-col-actions">Actions</span>
+        </div>
+        {% for routine in routines %}
+          <div class="admin-table-row" role="row">
+            <span role="cell"><span class="admin-role-tag admin-role-teacher">{{ routine.get_day_display }}</span></span>
+            <span class="admin-cell-mono" role="cell">{{ routine.start_time|time:"H:i" }}–{{ routine.end_time|time:"H:i" }}</span>
+            <span role="cell"><strong class="admin-applicant-name">{{ routine.subject }}</strong></span>
+            <span role="cell">{{ routine.department|default:"—" }}</span>
+            <span role="cell">{{ routine.batch|default:"—" }}{% if routine.section %} / {{ routine.section }}{% endif %}</span>
+            <span class="admin-cell-mono" role="cell">{{ routine.room.room_number }}</span>
+            <span role="cell">{{ routine.teacher.first_name }} {{ routine.teacher.last_name }}</span>
+            <span class="admin-cell-actions" role="cell">
+              <form method="post" action="{% url 'admin_portal:delete_routine' routine.id %}" class="admin-inline-form" onsubmit="return confirm('Remove this routine entry?')">
+                {% csrf_token %}
+                <button type="submit" class="admin-btn admin-btn-reject" title="Remove routine">Remove</button>
+              </form>
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="admin-empty">
+        <span class="admin-empty-mark">&#9200;</span>
+        <h3>No routines yet</h3>
+        <p>Use the grid above to enter the weekly timetable — saved entries will appear here.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

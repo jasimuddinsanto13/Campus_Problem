@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.venv-1/
+venv/
+node_modules/
+.env
+.env.local
+.vscode/
+instance/
+
+# User-uploaded files (profile pictures, issue attachments) — runtime data
+backend/media/
+
+# Firebase service-account credentials — never commit these
+serviceAccountKey.json

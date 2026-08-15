@@ -1,0 +1,93 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Campus Problem{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'style.css' %}">
+  <link rel="stylesheet" href="{% static 'auth.css' %}">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar portal-sidebar admin-sidebar-open">
+      <a class="brand" href="{% url 'home' %}" aria-label="Campus Problem home">
+        <span class="brand-mark">CP</span>
+        <span class="brand-name">Campus <strong>Problem</strong></span>
+      </a>
+
+      <!-- Simplified user card: avatar + name only (photo when one is set) -->
+      <div class="account account-top">
+        <span class="avatar">{% if user.profile_picture %}<img src="{{ user.profile_picture.url }}" alt="Profile photo">{% else %}{{ user.first_name|slice:":2"|upper|default:user.username|slice:":2" }}{% endif %}</span>
+        <span class="account-user-name"><strong>{{ user.first_name|default:user.username }}</strong></span>
+      </div>
+
+      <div class="workspace-label">{% block workspace_label %}{% endblock %}</div>
+
+      <nav class="nav-list" id="portalNav" aria-label="Main navigation">
+        {% block nav %}{% endblock %}
+      </nav>
+
+      <!-- Log out — pinned to the bottom of the menu bar -->
+      <div class="sidebar-bottom">
+        <form method="post" action="{% url 'logout' %}" class="logout-form">
+          {% csrf_token %}
+          <button type="submit" class="nav-item logout-item" title="Log out">
+            <span class="nav-icon">&#8614;</span>
+            <span class="logout-label">Log out</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Floating collapse arrow on the sidebar edge -->
+      <button type="button" class="sidebar-floating-toggle" id="sidebarFloatingToggle"
+              aria-label="Toggle menu" aria-expanded="true" title="Collapse menu">&#8249;</button>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu" aria-expanded="true" title="Toggle menu">&#8942;</button>
+          <div class="crumbs">{% block crumbs %}{% endblock %}</div>
+        </div>
+      </header>
+
+      {% if messages %}
+        <div class="auth-toasts dash-toasts">
+          {% for message in messages %}
+            <p class="auth-toast toast-{{ message.tags }}">{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="{% static 'auth.js' %}"></script>
+  <script>
+    (function () {
+      var sidebar = document.querySelector('.portal-sidebar');
+      if (!sidebar) return;
+      var floatingToggle = document.getElementById('sidebarFloatingToggle');
+      var sync = function (open) {
+        var toggle = document.getElementById('sidebarToggle');
+        if (toggle) toggle.setAttribute('aria-expanded', String(open));
+        if (floatingToggle) {
+          floatingToggle.setAttribute('aria-expanded', String(open));
+          floatingToggle.innerHTML = open ? '&#8249;' : '&#8250;';
+          floatingToggle.title = open ? 'Collapse menu' : 'Expand menu';
+        }
+      };
+      var flip = function () {
+        var open = sidebar.classList.toggle('admin-sidebar-open');
+        sync(open);
+      };
+      var toggle = document.getElementById('sidebarToggle');
+      if (toggle) toggle.addEventListener('click', flip);
+      if (floatingToggle) floatingToggle.addEventListener('click', flip);
+    })();
+  </script>
+</body>
+</html>

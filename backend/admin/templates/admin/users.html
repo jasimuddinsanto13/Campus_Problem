@@ -1,0 +1,169 @@
+{% extends 'portal_base.html' %}
+{% load static %}
+{% block title %}Users | Admin portal | Campus Problem{% endblock %}
+{% block workspace_label %}ADMIN PORTAL{% endblock %}
+{% block nav %}
+  <a class="nav-item" href="/"><span class="nav-icon">&#9673;</span>My dashboard</a>
+  <a class="nav-item active" href="{% url 'admin_portal:admin_users' %}"><span class="nav-icon">&#128101;</span>Users</a>
+  <a class="nav-item" href="{% url 'admin_portal:admin_routines' %}"><span class="nav-icon">&#9200;</span>Routines</a>
+  <a class="nav-item" href="/issues/"><span class="nav-icon">&#9632;</span>Issue desk</a>
+  <a class="nav-item" href="/booking/"><span class="nav-icon">&#128205;</span>Room booking</a>
+  <a class="nav-item" href="{% url 'admin_portal:settings' %}"><span class="nav-icon">&#9881;</span>Settings</a>
+{% endblock %}
+{% block crumbs %}<span>Admin portal</span><span>/</span><strong>User info</strong>{% endblock %}
+
+{% block content %}
+  <section class="page-heading dash-heading">
+    <div>
+      <p class="eyebrow">USER DIRECTORY</p>
+      <h1>Every account,<br><em>at a glance.</em></h1>
+      <p class="subhead">Registered students and faculty with their profile details. Passwords are stored as irreversible hashes — they can never be read back.</p>
+    </div>
+    <span class="count-chip">{{ students_count }} students · {{ teachers_count }} faculty</span>
+  </section>
+
+  <section class="admin-card">
+    <div class="admin-tabs" role="tablist" aria-label="User directory tabs">
+      <a class="admin-tab {% if active_tab == 'students' %}active{% endif %}" href="{% url 'admin_portal:admin_users' %}?tab=students" role="tab" aria-selected="{% if active_tab == 'students' %}true{% else %}false{% endif %}">
+        <span class="admin-tab-icon">&#127891;</span> Student view
+        <span class="admin-tab-count">{{ students_count }}</span>
+      </a>
+      <a class="admin-tab {% if active_tab == 'teachers' %}active{% endif %}" href="{% url 'admin_portal:admin_users' %}?tab=teachers" role="tab" aria-selected="{% if active_tab == 'teachers' %}true{% else %}false{% endif %}">
+        <span class="admin-tab-icon">&#127979;</span> Teacher view
+        <span class="admin-tab-count">{{ teachers_count }}</span>
+      </a>
+      <a class="admin-tab {% if active_tab == 'all' %}active{% endif %}" href="{% url 'admin_portal:admin_users' %}?tab=all" role="tab" aria-selected="{% if active_tab == 'all' %}true{% else %}false{% endif %}">
+        <span class="admin-tab-icon">&#128203;</span> User info
+        <span class="admin-tab-count">{{ all_users_count }}</span>
+      </a>
+    </div>
+
+    {% if active_tab == 'all' %}
+      <div class="admin-users-table" role="table" aria-label="All user accounts">
+        <div class="admin-table-row admin-table-head admin-users-all" role="row">
+          <span role="columnheader">Name</span>
+          <span role="columnheader">Email</span>
+          <span role="columnheader">Password hash</span>
+          <span role="columnheader">Role</span>
+          <span role="columnheader">Campus ID</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader">Joined</span>
+        </div>
+        {% for member in all_users %}
+          <div class="admin-table-row admin-users-all" role="row">
+            <span role="cell"><strong class="admin-applicant-name">{{ member.first_name|default:member.username }}</strong></span>
+            <span class="admin-cell-email" role="cell">{{ member.email|default:"—" }}</span>
+            <span class="admin-cell-hash-wrap" role="cell">
+              <code class="admin-cell-hash-full" title="Full hash: {{ member.password }} — stored one-way, can never be recovered.">&#128274; {{ member.password|slice:":28" }}…</code>
+              <button type="button" class="admin-hash-copy" data-hash="{{ member.password }}" title="Copy the full hash">copy</button>
+            </span>
+            <span role="cell"><span class="admin-role-tag admin-role-{{ member.role }}">{{ member.get_role_display }}</span></span>
+            <span class="admin-cell-mono" role="cell">{{ member.campus_id|default:"—" }}</span>
+            <span role="cell"><span class="admin-status-chip admin-status-{{ member.registration_status }}">{{ member.get_registration_status_display }}</span></span>
+            <span class="admin-cell-time" role="cell">{{ member.date_joined|date:"d M Y" }}</span>
+          </div>
+        {% empty %}
+          <div class="admin-empty">
+            <span class="admin-empty-mark">&#128203;</span>
+            <h3>No accounts yet</h3>
+            <p>Registered users will appear here once they sign up.</p>
+          </div>
+        {% endfor %}
+      </div>
+    {% elif active_tab == 'students' %}
+      <div class="admin-users-table" role="table" aria-label="Registered students">
+        <div class="admin-table-row admin-table-head admin-users-students" role="row">
+          <span role="columnheader">Username</span>
+          <span role="columnheader">Email</span>
+          <span role="columnheader">Department</span>
+          <span role="columnheader">Batch</span>
+          <span role="columnheader">Section</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader" class="admin-col-actions">Actions</span>
+        </div>
+        {% for member in students %}
+          <div class="admin-table-row admin-users-students" role="row">
+            <span role="cell"><strong class="admin-applicant-name">{{ member.username }}</strong></span>
+            <span class="admin-cell-email" role="cell">{{ member.email|default:"—" }}</span>
+            <span role="cell">{{ member.department|default:"—" }}</span>
+            <span role="cell">{{ member.batch|default:"—" }}</span>
+            <span role="cell">{{ member.section|default:"—" }}</span>
+            <span role="cell"><span class="admin-status-chip admin-status-{{ member.registration_status }}">{{ member.get_registration_status_display }}</span></span>
+            <span class="admin-cell-actions" role="cell">
+              {% if member.registration_status != 'approved' %}
+              <form method="post" action="{% url 'admin_portal:approve_user' member.id %}?next={{ request.get_full_path|urlencode }}" class="admin-inline-form">
+                {% csrf_token %}
+                <button type="submit" class="admin-btn admin-btn-approve" title="Approve {{ member.username }}">Approve</button>
+              </form>
+              {% endif %}
+              {% if member.registration_status != 'rejected' %}
+              <form method="post" action="{% url 'admin_portal:reject_user' member.id %}?next={{ request.get_full_path|urlencode }}" class="admin-inline-form">
+                {% csrf_token %}
+                <button type="submit" class="admin-btn admin-btn-reject" title="Reject {{ member.username }}">Reject</button>
+              </form>
+              {% endif %}
+            </span>
+          </div>
+        {% empty %}
+          <div class="admin-empty">
+            <span class="admin-empty-mark">&#128101;</span>
+            <h3>No students yet</h3>
+            <p>Registered students will appear here once they sign up.</p>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="admin-users-table" role="table" aria-label="Registered teachers">
+        <div class="admin-table-row admin-table-head admin-users-teachers" role="row">
+          <span role="columnheader">Username</span>
+          <span role="columnheader">Email</span>
+          <span role="columnheader">Department</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader" class="admin-col-actions">Actions</span>
+        </div>
+        {% for member in teachers %}
+          <div class="admin-table-row admin-users-teachers" role="row">
+            <span role="cell"><strong class="admin-applicant-name">{{ member.username }}</strong></span>
+            <span class="admin-cell-email" role="cell">{{ member.email|default:"—" }}</span>
+            <span role="cell">{{ member.department|default:"—" }}</span>
+            <span role="cell"><span class="admin-status-chip admin-status-{{ member.registration_status }}">{{ member.get_registration_status_display }}</span></span>
+            <span class="admin-cell-actions" role="cell">
+              {% if member.registration_status != 'approved' %}
+              <form method="post" action="{% url 'admin_portal:approve_user' member.id %}?next={{ request.get_full_path|urlencode }}" class="admin-inline-form">
+                {% csrf_token %}
+                <button type="submit" class="admin-btn admin-btn-approve" title="Approve {{ member.username }}">Approve</button>
+              </form>
+              {% endif %}
+              {% if member.registration_status != 'rejected' %}
+              <form method="post" action="{% url 'admin_portal:reject_user' member.id %}?next={{ request.get_full_path|urlencode }}" class="admin-inline-form">
+                {% csrf_token %}
+                <button type="submit" class="admin-btn admin-btn-reject" title="Reject {{ member.username }}">Reject</button>
+              </form>
+              {% endif %}
+            </span>
+          </div>
+        {% empty %}
+          <div class="admin-empty">
+            <span class="admin-empty-mark">&#127979;</span>
+            <h3>No faculty yet</h3>
+            <p>Registered teachers will appear here once they sign up.</p>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
+
+  <script>
+    (function () {
+      document.querySelectorAll('.admin-hash-copy').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          navigator.clipboard.writeText(btn.getAttribute('data-hash')).then(function () {
+            var label = btn.textContent;
+            btn.textContent = 'copied!';
+            setTimeout(function () { btn.textContent = label; }, 1400);
+          });
+        });
+      });
+    })();
+  </script>
+{% endblock %}
