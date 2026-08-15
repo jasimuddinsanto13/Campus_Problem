@@ -12,8 +12,23 @@ A role-based (Admin / Faculty / Student) university platform that unifies **camp
 
 ---
 
+## ✨ Features at a Glance
+
+- 🧭 **Role-based portals** — dedicated Admin, Faculty, and Student dashboards with server-side access control and a registration approval workflow.
+- 🛠️ **Campus issue tracker** — report broken projectors, AC faults, and other campus problems with categories, priorities, and status tracking (**Open / In Progress / Resolved**).
+- 🏫 **Smart classroom discovery & booking** — real-time free-room search across campus buildings with **"free until"** windows; faculty book Extra Class / Makeup / Exam slots instantly.
+- 📅 **Weekly routine management** — Sunday–Thursday master grid with cascading **batch → department → section** pickers; saved routines lock rooms as baseline occupancy.
+- ⚡ **Exam conflict override** — admin bookings that clash with a routine class auto-displace it and alert the affected faculty with a one-click reschedule flow.
+- 📢 **Targeted notice board** — role / department / batch / section-scoped notices with priority badges and file attachments.
+- 🚨 **Class cancellation & mass alerts** — one-click cancellation that auto-publishes an **URGENT** notice and fires push notifications to the exact matching students.
+- 📲 **Firebase Cloud Messaging** — real-time OS-level push alerts for cancellations and urgent notices (fails safe when unconfigured).
+- ✅ **Admin moderation** — approve/reject registrations, manage users, and review/trash booking requests.
+
+---
+
 ## Table of Contents
 
+- [✨ Features at a Glance](#-features-at-a-glance)
 - [1. Project Overview & Architecture](#1-project-overview--architecture)
 - [2. Key Features by User Role](#2-key-features-by-user-role)
 - [3. Tech Stack](#3-tech-stack)
