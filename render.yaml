@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: campus-dashboard
+    runtime: static
+    buildCommand: cd frontend/campus-dashboard && npm install && npm run build
+    staticPublishPath: frontend/campus-dashboard/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

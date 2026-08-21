@@ -939,7 +939,8 @@ def _admin_payload(email, campus_id, passkey):
 
 
 class AdminPasskeyRegistrationTests(TestCase):
-    """Admin registration must accept any DB-seeded passkey (add001..add010)."""
+    """Admin registration must accept any DB-seeded passkey (add001..add010
+    and ad001..ad010)."""
 
     def test_seeded_db_passkey_registers_approved_admin(self):
         response = self.client.post(reverse('register'), _admin_payload(
@@ -957,6 +958,50 @@ class AdminPasskeyRegistrationTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertTrue(User.objects.filter(username='admin-add010@niter.local').exists())
+
+    # ---- Alt passkeys: ad001..ad010 ----
+
+    def test_alt_passkey_ad001_registers_approved_admin(self):
+        response = self.client.post(reverse('register'), _admin_payload(
+            'admin-ad001@niter.local', 'ADM-01001', 'ad001'))
+
+        self.assertEqual(response.status_code, 302)  # auto-login redirect
+        user = User.objects.get(username='admin-ad001@niter.local')
+        self.assertEqual(user.role, 'admin')
+        self.assertEqual(user.registration_status, User.RegistrationStatus.APPROVED)
+        self.assertTrue(user.is_active)
+
+    def test_alt_passkey_ad010_registers_admin(self):
+        response = self.client.post(reverse('register'), _admin_payload(
+            'admin-ad010@niter.local', 'ADM-01010', 'ad010'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(User.objects.filter(username='admin-ad010@niter.local').exists())
+
+    def test_alt_passkey_via_admin_key_field(self):
+        """The admin_key POST field (the one the frontend actually submits)
+        must also accept the ad001..ad010 alt passkeys."""
+        response = self.client.post(reverse('register'), {
+            'full_name': 'Alt Key Admin',
+            'email': 'alt-admin@niter.local',
+            'admin_key': 'ad005',
+            'password': 'strongpass123',
+            'confirm_password': 'strongpass123',
+            'role': 'admin',
+        })
+        self.assertEqual(response.status_code, 302)
+        user = User.objects.get(email='alt-admin@niter.local')
+        self.assertEqual(user.role, 'admin')
+        self.assertEqual(user.registration_status, User.RegistrationStatus.APPROVED)
+        self.assertTrue(user.is_active)
+
+    def test_alt_passkey_case_insensitive(self):
+        """Passkey matching is case-insensitive: AD003 should work like ad003."""
+        response = self.client.post(reverse('register'), _admin_payload(
+            'admin-adupper@niter.local', 'ADM-01003', 'AD003'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(User.objects.filter(username='admin-adupper@niter.local').exists())
 
     def test_deactivated_passkey_rejects_admin_registration(self):
         from booking.models import AdminPasskey

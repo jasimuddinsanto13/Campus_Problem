@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env (DB credentials, secret key, API URL).
 load_dotenv(BASE_DIR / '.env', override=True)
 
+
 # --- Firebase Cloud Messaging (optional: Web Push notifications) ---
 # Initialize the Firebase Admin SDK from backend/serviceAccountKey.json (or
 # FIREBASE_CRED_PATH) when present. Push is strictly optional — without the
@@ -63,14 +64,19 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')]
 
-# The Vite dev server (port 8000) proxies POSTs to Django on port 8002, so
-# Django must trust the public origin the browser actually sees.
-CSRF_TRUSTED_ORIGINS = [
+# React is deployed separately from Django on Render. Keep local Vite origins
+# available and add the deployed frontend through FRONTEND_URL.
+FRONTEND_URL = os.environ.get('FRONTEND_URL', '').rstrip('/')
+CORS_ALLOWED_ORIGINS = {
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://localhost:8002',
     'http://127.0.0.1:8002',
-]
+}
+if FRONTEND_URL:
+    CORS_ALLOWED_ORIGINS.add(FRONTEND_URL)
+
+CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
 
 
 # Application definition
@@ -93,6 +99,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'campus_project.cors.FrontendCorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -121,8 +128,30 @@ TEMPLATES = [
 WSGI_APPLICATION = 'campus_project.wsgi.application'
 
 
-# Database — MySQL 8 (credentials come from .env / environment variables).
+# ---------------------------------------------------------------------------
+# Database — MySQL 8 on Aiven Cloud (credentials come from .env).
 # PyMySQL is used as the MySQLdb driver (see campus_project/__init__.py).
+# Aiven enforces TLS; we use ssl_verify_cert=False because Aiven's CA is
+# self-signed and not in the system cert store.  TLS transport is still on.
+# ---------------------------------------------------------------------------
+
+_DB_SSL_CA = os.environ.get('DB_SSL_CA', '')
+_DB_SSL_OPTS = {}
+if _DB_SSL_CA:
+    import pathlib
+    _ca_path = pathlib.Path(_DB_SSL_CA)
+    if not _ca_path.is_absolute():
+        _ca_path = BASE_DIR / _ca_path
+    if _ca_path.exists():
+        _DB_SSL_OPTS = {
+            'ssl': {
+                'ca': str(_ca_path),
+            },
+        }
+    else:
+        logger.warning(
+            'DB_SSL_CA path %s not found — SSL disabled for Django.', _ca_path,
+        )
 
 DATABASES = {
     'default': {
@@ -134,6 +163,7 @@ DATABASES = {
         'PORT': os.environ.get('DB_PORT', '3306'),
         'OPTIONS': {
             'charset': 'utf8mb4',
+            **_DB_SSL_OPTS,
         },
     }
 }

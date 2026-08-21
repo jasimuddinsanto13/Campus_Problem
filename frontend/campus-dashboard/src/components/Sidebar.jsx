@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
+import { API_BASE_URL } from '../lib/api';
 import Avatar from './Avatar';
 import ConfirmDialog from './ConfirmDialog';
 import {
@@ -20,6 +21,13 @@ import {
   MealIcon,
   BusIcon,
 } from './Icons';
+
+const LOGOUT_URL = `${API_BASE_URL}/accounts/logout/`;
+
+function clearClientAuth() {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+}
 
 // Navigation per portal. Each item is a real link — the address bar updates
 // on click and the active item is derived from the URL, not internal state.
@@ -94,7 +102,8 @@ export default function Sidebar({ variant = 'admin', collapsed, mobileOpen = fal
     setLogoutOpen(true);
   };
   const confirmLogout = () => {
-    window.location.href = '/accounts/logout/';
+    clearClientAuth();
+    window.location.replace(LOGOUT_URL);
   };
 
   const ArrowIcon = collapsed ? ChevronRightIcon : ChevronLeftIcon;
@@ -211,7 +220,7 @@ export default function Sidebar({ variant = 'admin', collapsed, mobileOpen = fal
         }`}
       >
         <a
-          href="/accounts/logout/"
+          href={LOGOUT_URL}
           title="Log out"
           onClick={handleLogout}
           className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 transition-all duration-200 hover:bg-rose-50 hover:text-rose-600 ${

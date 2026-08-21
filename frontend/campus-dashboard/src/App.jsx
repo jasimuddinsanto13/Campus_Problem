@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import ChatWidget from './components/ChatWidget';
 import Sidebar from './components/Sidebar';
@@ -23,6 +23,7 @@ import StudentDashboard from './pages/StudentDashboard';
 import StudentCancellations from './pages/StudentCancellations';
 import MealQuery from './pages/MealQuery';
 import BusNavigate from './pages/BusNavigate';
+import { API_BASE_URL } from './lib/api';
 
 const SIDEBAR_W = { expanded: 272, collapsed: 84 };
 
@@ -75,6 +76,13 @@ function PortalLoader() {
   );
 }
 
+function BackendLoginRedirect() {
+  useEffect(() => {
+    window.location.replace(`${API_BASE_URL}/accounts/login/`);
+  }, []);
+  return <PortalLoader />;
+}
+
 /**
  * Guards a portal route: waits for the profile fetch, bounces signed-out
  * users to the login page, and redirects a user who hits another role's
@@ -83,7 +91,7 @@ function PortalLoader() {
 function RoleGate({ role, children }) {
   const { role: currentRole, loading } = useUser();
   if (loading) return <PortalLoader />;
-  if (!currentRole) return <Navigate to="/accounts/login/" replace />;
+  if (!currentRole) return <BackendLoginRedirect />;
   if (currentRole !== role) return <Navigate to={ROLE_HOME[currentRole]} replace />;
   return children;
 }
@@ -92,7 +100,7 @@ function RoleGate({ role, children }) {
 function RoleHomeRedirect() {
   const { role, loading } = useUser();
   if (loading) return <PortalLoader />;
-  return <Navigate to={ROLE_HOME[role] || '/accounts/login/'} replace />;
+  return role ? <Navigate to={ROLE_HOME[role]} replace /> : <BackendLoginRedirect />;
 }
 
 export default function App() {
