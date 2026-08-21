@@ -76,11 +76,33 @@ function PortalLoader() {
   );
 }
 
-function BackendLoginRedirect() {
-  useEffect(() => {
-    window.location.replace(`${API_BASE_URL}/accounts/login/`);
-  }, []);
-  return <PortalLoader />;
+function FrontendLoginRedirect() {
+  const backendLoginUrl = `${API_BASE_URL}/accounts/login/`;
+
+  return (
+    <div className="grid min-h-[60vh] place-items-center px-4">
+      <div className="w-full max-w-md rounded-3xl border border-black/5 bg-white p-8 text-center shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+        <div className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-full bg-lime text-2xl font-black text-charcoal shadow-sm shadow-lime/40">
+          CP
+        </div>
+        <h1 className="text-3xl font-black tracking-tight text-charcoal">Sign in</h1>
+        <p className="mt-3 text-sm text-gray-600">
+          Your session has expired or you are not signed in yet.
+        </p>
+
+        <a
+          href={backendLoginUrl}
+          className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-lime px-4 py-3 text-sm font-semibold text-charcoal transition hover:brightness-95"
+        >
+          Continue to backend login
+        </a>
+
+        <p className="mt-4 text-xs text-gray-500">
+          This keeps the app on the frontend domain until you choose to sign in.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -91,7 +113,7 @@ function BackendLoginRedirect() {
 function RoleGate({ role, children }) {
   const { role: currentRole, loading } = useUser();
   if (loading) return <PortalLoader />;
-  if (!currentRole) return <BackendLoginRedirect />;
+  if (!currentRole) return <Navigate to="/login" replace />;
   if (currentRole !== role) return <Navigate to={ROLE_HOME[currentRole]} replace />;
   return children;
 }
@@ -100,7 +122,7 @@ function RoleGate({ role, children }) {
 function RoleHomeRedirect() {
   const { role, loading } = useUser();
   if (loading) return <PortalLoader />;
-  return role ? <Navigate to={ROLE_HOME[role]} replace /> : <BackendLoginRedirect />;
+  return role ? <Navigate to={ROLE_HOME[role]} replace /> : <Navigate to="/login" replace />;
 }
 
 export default function App() {
@@ -138,6 +160,7 @@ export default function App() {
           <Routes>
             {/* Entry point + legacy admin URLs (bookmarks keep working) */}
             <Route path="/" element={<RoleHomeRedirect />} />
+            <Route path="/login" element={<FrontendLoginRedirect />} />
             <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="/users" element={<Navigate to="/admin/users" replace />} />
             <Route path="/routines" element={<Navigate to="/admin/routines" replace />} />
