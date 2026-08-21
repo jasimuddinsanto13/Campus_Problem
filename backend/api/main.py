@@ -62,15 +62,27 @@ app = FastAPI(
     version='1.0.0',
 )
 
-# The Django-served pages call this API cross-origin during development.
+# The Django-served pages call this API cross-origin during development and in
+# Render deployments, where the frontend and backend are separate hosts.
+frontend_origin = os.environ.get('FRONTEND_URL', 'https://campus-problem-frontend.onrender.com').rstrip('/')
+backend_origin = os.environ.get('API_BASE_URL', 'https://campus-problem.onrender.com').rstrip('/')
+allowed_origins = {
+    'http://127.0.0.1:8000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8002',
+    'http://localhost:8002',
+    'https://campus-problem-frontend.onrender.com',
+    'https://campus-problem.onrender.com',
+}
+if frontend_origin:
+    allowed_origins.add(frontend_origin)
+if backend_origin:
+    allowed_origins.add(backend_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        'http://127.0.0.1:8000',
-        'http://localhost:8000',
-        'http://127.0.0.1:8002',
-        'http://localhost:8002',
-    ],
+    allow_origins=list(allowed_origins),
+    allow_origin_regex=r'https://.*\.onrender\.com|http://localhost:\d+',
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],

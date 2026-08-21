@@ -63,20 +63,46 @@ SECRET_KEY = os.environ.get(
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')]
+render_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if render_hostname:
+    ALLOWED_HOSTS.append(render_hostname)
 
 # React is deployed separately from Django on Render. Keep local Vite origins
 # available and add the deployed frontend through FRONTEND_URL.
-FRONTEND_URL = os.environ.get('FRONTEND_URL', '').rstrip('/')
+FRONTEND_URL = os.environ.get(
+    'FRONTEND_URL',
+    'https://campus-problem-frontend.onrender.com',
+).rstrip('/')
+RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL', '').rstrip('/')
 CORS_ALLOWED_ORIGINS = {
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://localhost:8002',
     'http://127.0.0.1:8002',
+    'https://campus-problem-frontend.onrender.com',
+    'https://campus-problem.onrender.com',
 }
-if FRONTEND_URL:
-    CORS_ALLOWED_ORIGINS.add(FRONTEND_URL)
+for origin in (FRONTEND_URL, RENDER_EXTERNAL_URL):
+    if origin:
+        CORS_ALLOWED_ORIGINS.add(origin)
 
-CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
+CSRF_TRUSTED_ORIGINS = [origin for origin in CORS_ALLOWED_ORIGINS if origin.startswith('http')]
+if RENDER_EXTERNAL_URL:
+    CSRF_TRUSTED_ORIGINS.append(RENDER_EXTERNAL_URL)
+if FRONTEND_URL:
+    CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)
+if render_hostname:
+    CSRF_TRUSTED_ORIGINS.extend([
+        f'https://{render_hostname}',
+        f'http://{render_hostname}',
+    ])
+
+# Allow Django auth cookies to survive a cross-site redirect from the Render
+# static frontend to the Render backend service while keeping the session secure.
+SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
 
 
 # Application definition

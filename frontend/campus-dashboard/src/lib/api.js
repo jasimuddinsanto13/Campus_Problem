@@ -1,14 +1,18 @@
-const configuredApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
+const configuredApiUrl = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
 
-// Automatically use the live Render backend in production if no env var is found.
+// The frontend and backend are deployed on different Render hosts in production.
+// Use the backend service URL explicitly, not the frontend origin.
 export const API_BASE_URL = (
-  configuredApiUrl || (import.meta.env.DEV ? 'http://127.0.0.1:8002' : 'https://campus-problem.onrender.com')
+  configuredApiUrl ||
+  (import.meta.env.DEV ? 'http://127.0.0.1:8001' : 'https://campus-problem.onrender.com')
 ).replace(/\/+$/, '');
 
 export function apiUrl(input) {
-  const value = typeof input === 'string' ? input : input.url;
-  if (!value.startsWith('/api/')) return value;
-  return `${API_BASE_URL}${value}`;
+  const value = typeof input === 'string' ? input : input?.url;
+  if (!value) return value;
+  if (/^https?:\/\//.test(value)) return value;
+  if (value.startsWith('/api/')) return `${API_BASE_URL}${value}`;
+  return value;
 }
 
 export function installApiFetch() {

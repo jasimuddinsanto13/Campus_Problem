@@ -1,9 +1,31 @@
 services:
   - type: web
-    name: campus-dashboard
+    name: campus-problem
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn campus_project.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: campus-problem.onrender.com,localhost,127.0.0.1
+      - key: FRONTEND_URL
+        value: https://campus-problem-frontend.onrender.com
+      - key: API_BASE_URL
+        value: https://campus-problem.onrender.com
+      - key: PYTHON_VERSION
+        value: "3.12"
+
+  - type: web
+    name: campus-problem-frontend
     runtime: static
     buildCommand: cd frontend/campus-dashboard && npm install && npm run build
     staticPublishPath: frontend/campus-dashboard/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://campus-problem.onrender.com
     routes:
       - type: rewrite
         source: /*
