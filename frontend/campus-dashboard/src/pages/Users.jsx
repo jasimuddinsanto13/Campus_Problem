@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import Avatar from '../components/Avatar';
 import { getCsrfToken } from '../lib/csrf';
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'student', label: 'Students' },
   { id: 'teacher', label: 'Faculty' },
   { id: 'admin', label: 'Admins' },
+  { id: 'cr', label: 'CRs' },
 ];
 
 const ROLE_META = {
@@ -58,14 +60,21 @@ const thClass = 'px-4 py-3 text-left text-[10.5px] font-bold uppercase tracking-
 const tdClass = 'px-4 py-3.5 align-middle';
 
 export default function Users() {
+  const navigate = useNavigate();
   const { id: currentUserId } = useUser();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
-  const [tab, setTab] = useState('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'all';
+  // 'pending' is a status filter, not a role tab — map it to show pending users.
+  const initialStatusFromTab = initialTab === 'pending' ? 'pending' : 'all';
+  const initialRoleTab = initialTab === 'pending' ? 'all' : initialTab;
+  const [tab, setTab] = useState(initialRoleTab);
+  const [statusFilter, setStatusFilter] = useState(initialStatusFromTab);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+
   const [busy, setBusy] = useState(null); // { id, action }
   const [roleEditing, setRoleEditing] = useState(null); // user id with open role select
 
@@ -109,11 +118,19 @@ export default function Users() {
         headers['Content-Type'] = 'application/json';
         body = JSON.stringify(extra);
       }
-      const res = await fetch(`/api/users/${user.id}/${action}/`, {
+      // CR assign/revoke go to dedicated /api/cr/ endpoints.
+      const crActions = { 'assign-cr': '/api/cr/assign/', 'revoke-cr': '/api/cr/revoke/' };
+      const url = crActions[action]
+        ? crActions[action]
+        : `/api/users/${user.id}/${action}/`;
+      const crBody = crActions[action]
+        ? JSON.stringify({ user_id: user.id })
+        : body;
+      const res = await fetch(url, {
         method: 'POST',
         credentials: 'same-origin',
         headers,
-        body,
+        body: crBody,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'That action failed.');
@@ -126,6 +143,8 @@ export default function Users() {
           action === 'approve' ? 'approved'
           : action === 'deactivate' ? 'deactivated'
           : action === 'role' ? 'role updated for'
+          : action === 'assign-cr' ? 'assigned as CR'
+          : action === 'revoke-cr' ? 'removed from CR role'
           : 'updated';
         showToast(`${user.full_name} ${verb}.`);
       }
@@ -155,6 +174,7 @@ export default function Users() {
       student: users.filter((u) => u.role === 'student').length,
       teacher: users.filter((u) => u.role === 'teacher').length,
       admin: users.filter((u) => u.role === 'admin').length,
+      cr: users.filter((u) => u.is_cr).length,
     }),
     [users],
   );
@@ -164,7 +184,11 @@ export default function Users() {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return users.filter((u) => {
-      if (tab !== 'all' && u.role !== tab) return false;
+      if (tab === 'cr') {
+        if (!u.is_cr) return false;
+      } else if (tab !== 'all' && u.role !== tab) {
+        return false;
+      }
       if (statusFilter !== 'all' && u.status !== statusFilter) return false;
       if (q) {
         const hay = `${u.full_name} ${u.email} ${u.username} ${u.campus_id || ''}`.toLowerCase();
@@ -184,7 +208,7 @@ export default function Users() {
     <div className="animate-[fadeIn_.35s_ease]">
       {/* Toast */}
       {toast && (
-        <div className="fixed right-5 top-5 z-50 flex items-center gap-3 rounded-xl border border-black/[0.06] bg-white px-4 py-3 shadow-xl shadow-black/[0.08] animate-[fadeIn_.3s_ease]">
+        <div className="fixed right-3 top-5 z-50 flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-xl border border-black/[0.06] bg-white px-3 py-3 shadow-xl shadow-black/[0.08] animate-[fadeIn_.3s_ease] sm:right-5 sm:px-4">
           <span
             className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
               toast.error ? 'bg-rose-50 text-rose-500' : 'bg-lime text-charcoal'
@@ -210,11 +234,11 @@ export default function Users() {
       </p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-charcoal lg:text-[32px]">
+          <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-charcoal sm:text-[28px] lg:text-[32px]">
             User Directory &amp; Approvals
           </h1>
           <p className="mt-1.5 max-w-lg text-[13.5px] leading-relaxed text-gray-500">
-            Approve new registrations, adjust roles, and keep every campus account verified.
+            Approve new registrations, manage Class Representatives, adjust roles, and keep every campus account verified.
           </p>
         </div>
         <button
@@ -226,6 +250,7 @@ export default function Users() {
           Refresh
         </button>
       </div>
+
 
       {/* Pending review banner */}
       {pendingUsers.length > 0 && (
@@ -283,7 +308,7 @@ export default function Users() {
                 type="button"
                 role="tab"
                 aria-selected={tab === t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => { setTab(t.id); setSearchParams({}, { replace: true }); }}
                 className={`rounded-full px-4 py-2 text-[12.5px] font-bold transition ${
                   tab === t.id
                     ? 'bg-ink text-white shadow-md shadow-black/15'
@@ -400,16 +425,20 @@ export default function Users() {
                       key={user.id}
                       className="border-b border-black/[0.04] transition last:border-0 hover:bg-canvas/70"
                     >
-                      {/* User */}
+                      {/* User — clickable row */}
                       <td className={tdClass}>
-                        <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/users/${user.id}`)}
+                          className="flex items-center gap-3 cursor-pointer rounded-lg p-0 text-left transition hover:bg-lime/10 -m-2 p-2"
+                        >
                           <Avatar
                             name={user.full_name}
                             src={user.profile_picture}
                             className="h-10 w-10 text-[12px]"
                           />
                           <div className="min-w-0">
-                            <p className="truncate text-[13px] font-bold text-charcoal">
+                            <p className="truncate text-[13px] font-bold text-charcoal hover:text-lime-deep transition">
                               {user.full_name}
                               {isSelf && (
                                 <span className="ml-1.5 rounded-full bg-lime/40 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-lime-deep">
@@ -422,16 +451,23 @@ export default function Users() {
                               {user.campus_id ? ` · ${user.campus_id}` : ''}
                             </p>
                           </div>
-                        </div>
+                        </button>
                       </td>
 
                       {/* Role */}
                       <td className={tdClass}>
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${role.badge}`}
-                        >
-                          {role.label}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${role.badge}`}
+                          >
+                            {role.label}
+                          </span>
+                          {user.is_cr && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700">
+                              ★ CR
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Department / batch */}
@@ -459,6 +495,33 @@ export default function Users() {
                       {/* Actions */}
                       <td className={`${tdClass} text-right`}>
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* CR assign / revoke (students only) */}
+                          {user.role === 'student' && user.status === 'active' && (
+                            <button
+                              type="button"
+                              disabled={!!busy}
+                              onClick={() =>
+                                user.is_cr
+                                  ? runAction(user, 'revoke-cr')
+                                  : runAction(user, 'assign-cr')
+                              }
+                              title={user.is_cr ? 'Remove CR status' : 'Assign as Class Representative'}
+                              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-bold transition disabled:cursor-wait disabled:opacity-50 ${
+                                user.is_cr
+                                  ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                  : 'border border-black/[0.07] bg-white text-gray-500 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700'
+                              }`}
+                            >
+                              {isBusy && busy.action === 'assign-cr'
+                                ? '…'
+                                : isBusy && busy.action === 'revoke-cr'
+                                  ? '…'
+                                  : user.is_cr
+                                    ? '★ Remove CR'
+                                    : '☆ Make CR'}
+                            </button>
+                          )}
+
                           {user.status !== 'active' && (
                             <button
                               type="button"
@@ -477,18 +540,48 @@ export default function Users() {
                           )}
 
                           {isEditingRole ? (
-                            <select
-                              autoFocus
-                              value={user.role}
-                              onChange={(e) => changeRole(user, e.target.value)}
-                              onBlur={() => setRoleEditing(null)}
-                              aria-label="Choose role"
-                              className="rounded-lg border border-lime-deep/40 bg-white px-2 py-1.5 text-[11.5px] font-bold text-charcoal outline-none ring-2 ring-lime/40"
-                            >
-                              <option value="student">Student</option>
-                              <option value="teacher">Faculty</option>
-                              <option value="admin">Admin</option>
-                            </select>
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                autoFocus
+                                value={user.role}
+                                onChange={(e) => changeRole(user, e.target.value)}
+                                aria-label="Choose role"
+                                className="rounded-lg border border-lime-deep/40 bg-white px-2 py-1.5 text-[11.5px] font-bold text-charcoal outline-none ring-2 ring-lime/40"
+                              >
+                                <option value="student">Student</option>
+                                <option value="teacher">Faculty</option>
+                                <option value="admin">Admin</option>
+                              </select>
+                              {user.role === 'student' && (
+                                <button
+                                  type="button"
+                                  disabled={!!busy}
+                                  onClick={() =>
+                                    user.is_cr
+                                      ? runAction(user, 'revoke-cr')
+                                      : runAction(user, 'assign-cr')
+                                  }
+                                  title={user.is_cr ? 'Remove CR' : 'Make CR'}
+                                  className={`rounded-lg px-2 py-1.5 text-[10px] font-extrabold transition ${
+                                    user.is_cr
+                                      ? 'border border-amber-200 bg-amber-50 text-amber-700'
+                                      : 'border border-black/[0.07] bg-white text-gray-400 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700'
+                                  }`}
+                                >
+                                  {isBusy && (busy.action === 'assign-cr' || busy.action === 'revoke-cr')
+                                    ? '…'
+                                    : user.is_cr ? '★ CR' : '☆ CR'}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setRoleEditing(null)}
+                                title="Done"
+                                className="grid h-7 w-7 place-items-center rounded-lg text-gray-400 transition hover:bg-canvas hover:text-charcoal"
+                              >
+                                <XIcon className="h-3 w-3" />
+                              </button>
+                            </div>
                           ) : (
                             <button
                               type="button"

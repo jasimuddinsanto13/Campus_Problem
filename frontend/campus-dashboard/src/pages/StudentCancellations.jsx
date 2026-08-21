@@ -41,7 +41,7 @@ export default function StudentCancellations() {
       </p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-charcoal lg:text-[32px]">
+          <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-charcoal sm:text-[28px] lg:text-[32px]">
             Class cancellation alerts
           </h1>
           <p className="mt-1.5 max-w-xl text-[13.5px] leading-relaxed text-gray-500">

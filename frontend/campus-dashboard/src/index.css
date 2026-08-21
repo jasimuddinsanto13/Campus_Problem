@@ -101,3 +101,41 @@ html.dark .bg-ink\/5 {
 html.dark .bg-ink\/\[0\.03\] {
   background-color: rgb(232 235 241 / 0.04);
 }
+
+/* ---------------------------------------------------------------------------
+   Responsive utilities
+   ------------------------------------------------------------------------- */
+
+/* Toast notifications — full-width on small screens so they don't overflow. */
+@media (max-width: 640px) {
+  .toast-fixed {
+    right: 1rem !important;
+    left: 1rem !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+}
+
+/* Chat widget — smaller on mobile */
+@media (max-width: 480px) {
+  .chat-window {
+    right: 0.5rem !important;
+    bottom: 5rem !important;
+    width: calc(100vw - 1rem) !important;
+    height: calc(100vh - 8rem) !important;
+    max-height: 480px !important;
+  }
+}
+
+/* Table containers — horizontal scroll on mobile */
+.table-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* Prevent horizontal overflow on mobile */
+@media (max-width: 768px) {
+  main {
+    overflow-x: hidden;
+  }
+}

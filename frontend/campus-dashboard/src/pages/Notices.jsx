@@ -68,6 +68,8 @@ export default function Notices() {
   const [category, setCategory] = useState('general'); // 'general' | 'department'
   const [dept, setDept] = useState('CSE');
   const [query, setQuery] = useState('');
+  // KPI card filter — 'all' (Total Notices) | 'urgent' | 'pinned'
+  const [activeFilter, setActiveFilter] = useState('all');
 
   // ---- Create / edit modal (3-step targeting wizard) ----
   const [modalOpen, setModalOpen] = useState(false);
@@ -305,6 +307,14 @@ export default function Notices() {
     );
   }, [notices, query]);
 
+  // KPI-card filter applied on top of the search results — the table renders
+  // `visible`, while the cards keep showing full totals for the current tab.
+  const visible = useMemo(() => {
+    if (activeFilter === 'urgent') return filtered.filter((n) => n.priority === 'urgent');
+    if (activeFilter === 'pinned') return filtered.filter((n) => n.pinned);
+    return filtered;
+  }, [filtered, activeFilter]);
+
   const counts = useMemo(
     () => ({
       total: filtered.length,
@@ -316,6 +326,7 @@ export default function Notices() {
 
   const KPIS = [
     {
+      id: 'all',
       label: 'Total Notices',
       value: counts.total,
       icon: MegaphoneIcon,
@@ -323,6 +334,7 @@ export default function Notices() {
       accent: 'border-lime',
     },
     {
+      id: 'urgent',
       label: 'Urgent',
       value: counts.urgent,
       icon: BanIcon,
@@ -330,6 +342,7 @@ export default function Notices() {
       accent: 'border-rose-300',
     },
     {
+      id: 'pinned',
       label: 'Pinned to Top',
       value: counts.pinned,
       icon: PinIcon,
@@ -344,7 +357,7 @@ export default function Notices() {
     <div className="animate-[fadeIn_.35s_ease]">
       {/* Toast */}
       {toast && (
-        <div className="fixed right-5 top-5 z-50 flex items-center gap-3 rounded-xl border border-black/[0.06] bg-white px-4 py-3 shadow-xl shadow-black/[0.08] animate-[fadeIn_.3s_ease]">
+        <div className="fixed right-3 top-5 z-50 flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-xl border border-black/[0.06] bg-white px-3 py-3 shadow-xl shadow-black/[0.08] animate-[fadeIn_.3s_ease] sm:right-5 sm:px-4">
           <span
             className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
               toast.error ? 'bg-rose-50 text-rose-500' : 'bg-lime text-charcoal'
@@ -370,7 +383,7 @@ export default function Notices() {
       </p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-charcoal lg:text-[32px]">
+          <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-charcoal sm:text-[28px] lg:text-[32px]">
             Notice Management
           </h1>
           <p className="mt-1.5 max-w-xl text-[13.5px] leading-relaxed text-gray-500">
@@ -474,14 +487,20 @@ export default function Notices() {
         </div>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards — click to filter the table below (active card is highlighted) */}
       <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
         {KPIS.map((kpi) => {
           const Icon = kpi.icon;
+          const isActive = activeFilter === kpi.id;
           return (
-            <article
-              key={kpi.label}
-              className={`rounded-2xl border border-black/5 border-t-4 ${kpi.accent} bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg`}
+            <button
+              key={kpi.id}
+              type="button"
+              onClick={() => setActiveFilter(kpi.id)}
+              aria-pressed={isActive}
+              className={`rounded-2xl border border-black/5 border-t-4 ${kpi.accent} p-5 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+                isActive ? 'bg-lime/10 ring-2 ring-lime-deep/40' : 'bg-white'
+              }`}
             >
               <div className="flex items-start justify-between">
                 <div>
@@ -496,7 +515,7 @@ export default function Notices() {
                   <Icon className="h-5 w-5" />
                 </span>
               </div>
-            </article>
+            </button>
           );
         })}
       </div>
@@ -532,7 +551,7 @@ export default function Notices() {
                 </button>
               </div>
             </div>
-          ) : filtered.length === 0 ? (
+          ) : visible.length === 0 ? (
             <div className="grid min-h-[260px] place-items-center p-8 text-center">
               <div className="max-w-sm">
                 <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-lime/20 text-lime-deep">
@@ -549,7 +568,7 @@ export default function Notices() {
                         : `No ${dept} department notices are published for the ${target === 'faculty' ? 'faculty' : 'student'} audience.`}
                     </p>
                   </>
-                ) : (
+                ) : query.trim() ? (
                   <>
                     <h3 className="mt-4 text-[15px] font-bold text-charcoal">
                       No matches for “{query}”
@@ -564,6 +583,24 @@ export default function Notices() {
                       className="mt-4 rounded-xl bg-ink px-4 py-2 text-[12px] font-bold text-white transition hover:bg-black"
                     >
                       Clear search
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="mt-4 text-[15px] font-bold text-charcoal">
+                      No {activeFilter === 'urgent' ? 'urgent' : 'pinned'} notices
+                    </h3>
+                    <p className="mt-1 text-[12.5px] text-gray-500">
+                      {activeFilter === 'urgent'
+                        ? 'Nothing is flagged urgent right now.'
+                        : 'No notices are pinned to the top right now.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveFilter('all')}
+                      className="mt-4 rounded-xl bg-ink px-4 py-2 text-[12px] font-bold text-white transition hover:bg-black"
+                    >
+                      Show all notices
                     </button>
                   </>
                 )}
@@ -601,7 +638,7 @@ export default function Notices() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((n) => {
+                {visible.map((n) => {
                   const meta = PRIORITY_META[n.priority] || PRIORITY_META.normal;
                   const isBusy = busy && busy.id === n.id;
                   return (

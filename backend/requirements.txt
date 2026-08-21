@@ -15,6 +15,11 @@ python-dotenv>=1.0
 python-docx>=1.1
 Pillow>=10.0  # required by Django ImageField (profile pictures)
 
+# --- AI chat assistant (Google Gemini, Interactions API) ---
+# Official current SDK (google-generativeai is deprecated). Requires
+# GEMINI_API_KEY in .env; without it the chat widget simply returns 503.
+google-genai>=2.3.0
+
 # --- Push notifications (Firebase Cloud Messaging) ---
 # Sends "Class Cancelled" pushes to matched students' devices. Requires
 # FCM_SERVICE_ACCOUNT_PATH in backend/.env pointing at a Firebase service

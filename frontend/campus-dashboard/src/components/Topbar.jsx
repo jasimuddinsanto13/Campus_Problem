@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
-import { BellIcon, MoonIcon, PlusIcon, RefreshIcon, SunIcon } from './Icons';
+import { BellIcon, MoonIcon, PlusIcon, RefreshIcon, SunIcon, MenuIcon } from './Icons';
 
 const THEME_KEY = 'campus-theme';
 
@@ -22,7 +22,7 @@ function timeAgo(iso) {
 const glassBtn =
   'relative grid h-10 w-10 place-items-center rounded-2xl border border-slate-200/80 bg-white/80 text-gray-600 shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:text-charcoal active:translate-y-0';
 
-export default function Topbar({ portalLabel = 'Admin portal', pageLabel }) {
+export default function Topbar({ portalLabel = 'Admin portal', pageLabel, onMenuToggle }) {
   const { role } = useUser();
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -203,7 +203,20 @@ export default function Topbar({ portalLabel = 'Admin portal', pageLabel }) {
   };
 
   return (
-    <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between gap-4 border-b border-black/[0.06] bg-canvas px-5 lg:px-8">
+    <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between gap-4 border-b border-black/[0.06] bg-canvas px-3 sm:px-5 lg:px-8">
+      {/* Hamburger menu — mobile only */}
+      {onMenuToggle && (
+        <button
+          type="button"
+          onClick={onMenuToggle}
+          aria-label="Toggle navigation menu"
+          title="Menu"
+          className="md:hidden grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200/80 bg-white/80 text-gray-600 shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:text-charcoal"
+        >
+          <MenuIcon className="h-5 w-5" />
+        </button>
+      )}
+
       {/* Breadcrumb — portal name + current page */}
       <nav className="flex min-w-0 items-center gap-2 text-sm" aria-label="Breadcrumb">
         <span className="hidden text-gray-500 sm:inline">{portalLabel}</span>
@@ -212,16 +225,16 @@ export default function Topbar({ portalLabel = 'Admin portal', pageLabel }) {
       </nav>
 
       {/* Control hub — across from the breadcrumb */}
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {/* Primary action */}
         {action && (
           <button
             type="button"
             onClick={handleAction}
-            className="flex h-10 items-center gap-2 rounded-2xl bg-[#C4F135] px-4 text-[13px] font-semibold text-black shadow-sm shadow-lime/30 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+            className="flex h-10 items-center gap-2 rounded-2xl bg-[#C4F135] px-3 text-[13px] font-semibold text-black shadow-sm shadow-lime/30 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 sm:px-4"
           >
-            <PlusIcon className="h-4 w-4" />
-            {action.label}
+            <PlusIcon className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{action.label}</span>
           </button>
         )}
 
@@ -244,7 +257,7 @@ export default function Topbar({ portalLabel = 'Admin portal', pageLabel }) {
             <>
               {/* Click-away backdrop */}
               <div className="fixed inset-0 z-30" onClick={() => setBellOpen(false)} />
-              <div className="absolute right-0 top-[calc(100%+10px)] z-40 w-[320px] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl shadow-black/10 animate-[popIn_.18s_ease]">
+              <div className="absolute right-0 top-[calc(100%+10px)] z-40 w-[280px] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl shadow-black/10 animate-[popIn_.18s_ease] sm:w-[320px]">
                 <div className="flex items-center justify-between border-b border-black/[0.05] bg-panel/60 px-4 py-3">
                   <p className="text-[12px] font-extrabold tracking-tight text-charcoal">
                     Notifications
@@ -320,16 +333,14 @@ export default function Topbar({ portalLabel = 'Admin portal', pageLabel }) {
           className={glassBtn}
         >
           {dark ? <SunIcon className="h-[18px] w-[18px]" /> : <MoonIcon className="h-[18px] w-[18px]" />}
-        </button>
-
-        {/* Quick refresh */}
-        <button
-          type="button"
-          onClick={refresh}
-          aria-label="Refresh data"
-          title="Refresh data"
-          className={glassBtn}
-        >
+        </button>          {/* Quick refresh */}
+          <button
+              type="button"
+              onClick={refresh}
+              aria-label="Refresh data"
+              title="Refresh data"
+              className={`${glassBtn} hidden sm:grid`}
+          >
           <span
             key={spinKey}
             className="grid place-items-center"

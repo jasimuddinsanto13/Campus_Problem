@@ -166,7 +166,7 @@ export default function AdminIssueDesk() {
     <div className="animate-[fadeIn_.35s_ease]">
       {/* Toast */}
       {toast && (
-        <div className="fixed right-5 top-5 z-50 flex items-center gap-3 rounded-xl border border-black/[0.06] bg-white px-4 py-3 shadow-xl shadow-black/[0.08] animate-[fadeIn_.3s_ease]">
+        <div className="fixed right-3 top-5 z-50 flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-xl border border-black/[0.06] bg-white px-3 py-3 shadow-xl shadow-black/[0.08] animate-[fadeIn_.3s_ease] sm:right-5 sm:px-4">
           <span
             className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
               toast.error ? 'bg-rose-50 text-rose-500' : 'bg-lime text-charcoal'
@@ -192,7 +192,7 @@ export default function AdminIssueDesk() {
       </p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-charcoal lg:text-[32px]">
+          <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-charcoal sm:text-[28px] lg:text-[32px]">
             Issue Desk
           </h1>
           <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-gray-500">

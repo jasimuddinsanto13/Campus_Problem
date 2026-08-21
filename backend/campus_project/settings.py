@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env (DB credentials, secret key, API URL).
-load_dotenv(BASE_DIR / '.env')
+load_dotenv(BASE_DIR / '.env', override=True)
 
 # --- Firebase Cloud Messaging (optional: Web Push notifications) ---
 # Initialize the Firebase Admin SDK from backend/serviceAccountKey.json (or

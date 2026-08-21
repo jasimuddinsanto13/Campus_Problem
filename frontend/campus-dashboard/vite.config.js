@@ -29,6 +29,13 @@ export default defineConfig({
         changeOrigin: false,
         secure: false,
       },
+      '/api/cr': {
+        // Class Representative management — lives in Django (must come before
+        // the generic /api rule that targets FastAPI).
+        target: 'http://127.0.0.1:8002',
+        changeOrigin: false,
+        secure: false,
+      },
       '/api/room-booking': {
         // Faculty / Admin Room booking pages — availability search and
         // extra-class request workflow live in Django (must come before the
@@ -58,6 +65,12 @@ export default defineConfig({
         secure: false,
       },
       '/api/admin/issues': {
+        target: 'http://127.0.0.1:8002',
+        changeOrigin: false,
+        secure: false,
+      },
+      '/api/meal-query': {
+        // Meal Query — hostel meal cancellation requests live in Django.
         target: 'http://127.0.0.1:8002',
         changeOrigin: false,
         secure: false,

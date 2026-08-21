@@ -26,6 +26,41 @@ class StatusUpdate(BaseModel):
     status: str
 
 
+class ChatRequest(BaseModel):
+    """One turn of the Campus Assistant chat widget."""
+
+    message: str
+    # Opaque id of the previous Gemini interaction — passing it back chains
+    # turns so the API maintains conversation history server-side.
+    interaction_id: str | None = None
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    interaction_id: str | None = None
+
+
+class ChatTranscribeRequest(BaseModel):
+    """Voice input: base64-encoded audio (WAV 16-bit PCM) + its mime type."""
+
+    audio_base64: str
+    mime_type: str = 'audio/wav'
+
+
+class ChatTranscribeResponse(BaseModel):
+    transcript: str
+
+
+class ChatSpeakRequest(BaseModel):
+    text: str
+
+
+class ChatSpeakResponse(BaseModel):
+    audio_base64: str
+    mime_type: str = 'audio/wav'
+    sample_rate: int = 24000
+
+
 class Summary(BaseModel):
     total: int
     open: int

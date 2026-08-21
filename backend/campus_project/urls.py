@@ -57,7 +57,15 @@ urlpatterns = [
     path('api/routines/my-schedule/', accounts_views.my_schedule_api, name='api_my_schedule'),
     path('api/routines/department/', accounts_views.department_routine_api, name='api_department_routine'),
     path('api/users/', accounts_views.users_api, name='api_users'),
+    path('api/users/<int:user_id>/force-reset/', accounts_views.user_force_reset_api, name='api_user_force_reset'),
+    path('api/users/<int:user_id>/', accounts_views.user_profile_api, name='api_user_profile'),
     path('api/users/<int:user_id>/<str:action>/', accounts_views.user_action, name='api_user_action'),
+    # Class Representative (CR) management — admin grants/revokes CR status,
+    # plus a student-list endpoint for the CR picker.
+    path('api/cr/', accounts_views.cr_list_api, name='api_cr_list'),
+    path('api/cr/assign/', accounts_views.cr_assign_api, name='api_cr_assign'),
+    path('api/cr/revoke/', accounts_views.cr_revoke_api, name='api_cr_revoke'),
+    path('api/cr/students/', accounts_views.cr_students_api, name='api_cr_students'),
     # REST endpoints for the Faculty / Admin Room booking pages (extra classes).
     path('api/room-booking/availability/', booking_api_views.availability_api, name='api_room_availability'),
     path('api/room-booking/requests/', booking_api_views.extra_class_requests_api, name='api_room_requests'),
@@ -79,6 +87,14 @@ urlpatterns = [
     # FCM push-subscription registration (web/mobile device tokens).
     path('api/push/subscribe/', cancellation_views.push_subscribe_api, name='api_push_subscribe'),
     path('api/push/unsubscribe/', cancellation_views.push_unsubscribe_api, name='api_push_unsubscribe'),
+    # AI chat assistant — same-origin proxy to the FastAPI Gemini endpoints
+    # (chat, voice transcription, and text-to-speech).
+    path('api/chat', spa_views.chat_proxy, name='api_chat'),
+    path('api/chat/<path:subpath>', spa_views.chat_proxy, name='api_chat_subpath'),
+    # Meal Query — hostel meal cancellation requests (student submits, manager reviews).
+    path('api/meal-query/', accounts_views.meal_cancellations_api, name='api_meal_cancellations'),
+    path('api/meal-query/create/', accounts_views.meal_cancellation_create_api, name='api_meal_cancellation_create'),
+    path('api/meal-query/<int:cancellation_id>/', accounts_views.meal_cancellation_delete_api, name='api_meal_cancellation_delete'),
     # Campus Issue Desk — faculty submission/outbox + admin management.
     path('api/issues/create/', issues_api_views.create_issue, name='api_issue_create'),
     path('api/issues/my-issues/', issues_api_views.my_issues, name='api_my_issues'),

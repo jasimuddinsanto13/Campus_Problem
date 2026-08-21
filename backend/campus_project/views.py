@@ -14,10 +14,13 @@ gates live in the SPA itself (signed-out visitors are redirected to the
 login page by the frontend).
 """
 
+import json
 from pathlib import Path
+from urllib import error as urllib_error, request as urllib_request
 
 from django.conf import settings
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
 # frontend/campus-dashboard/dist sits next to the backend/ folder (settings.BASE_DIR).
 SPA_DIST = Path(settings.BASE_DIR).parent / 'frontend' / 'campus-dashboard' / 'dist'
@@ -49,3 +52,49 @@ def spa_asset(request, asset_path):
 admin_portal = react_spa
 faculty_portal = react_spa
 student_portal = react_spa
+
+
+@csrf_exempt
+def chat_proxy(request, subpath=''):
+    """POST /api/chat[/...] -> the FastAPI Gemini assistant, same-origin.
+
+    The React dashboard calls /api/chat, /api/chat/transcribe and
+    /api/chat/speak on this origin; Django forwards the body to the FastAPI
+    service so the browser never talks to FastAPI or Gemini directly — no
+    CORS preflight, no client-side API key. Error responses from FastAPI are
+    forwarded as {detail} so the widget can show the real reason (missing
+    key, Gemini failure, …).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'detail': 'Method not allowed — use POST.'}, status=405)
+    try:
+        body = json.loads(request.body or b'{}')
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({'detail': 'Request body must be valid JSON.'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'detail': 'Request body must be a JSON object.'}, status=400)
+
+    upstream = f"{settings.API_BASE_URL.rstrip('/')}/api/chat"
+    if subpath:
+        upstream += '/' + subpath
+    req = urllib_request.Request(
+        upstream,
+        data=json.dumps(body).encode('utf-8'),
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib_request.urlopen(req, timeout=180) as resp:
+            return JsonResponse(json.loads(resp.read().decode('utf-8')))
+    except urllib_error.HTTPError as e:
+        # Forward FastAPI's structured error (missing key, Gemini failure, …).
+        try:
+            detail = json.loads(e.read().decode('utf-8')).get('detail')
+        except Exception:
+            detail = None
+        return JsonResponse({'detail': detail or f'Chat service error (HTTP {e.code}).'}, status=e.code)
+    except Exception as exc:  # FastAPI down / connection refused / timeout
+        return JsonResponse(
+            {'detail': f'Chat service unreachable — is FastAPI running on port 8001? ({exc})'},
+            status=502,
+        )

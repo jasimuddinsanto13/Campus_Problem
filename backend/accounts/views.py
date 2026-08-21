@@ -35,7 +35,7 @@ from django.views.decorators.http import require_http_methods
 from PIL import Image
 
 from booking.fcm import clean_token, register_device_token
-from booking.models import AdminPasskey, RegistrationRequest, Room, RoutineSlot
+from booking.models import AdminPasskey, MealCancellation, RegistrationRequest, Room, RoutineSlot
 
 User = get_user_model()
 
@@ -319,6 +319,7 @@ def _profile_payload(user, request):
         'department': user.department,
         'batch': user.batch,
         'section': user.section,
+        'is_cr': user.is_cr,
         'profile_picture': (
             request.build_absolute_uri(user.profile_picture.url)
             if user.profile_picture
@@ -751,6 +752,7 @@ def _user_row(user, request):
         'batch': user.batch,
         'section': user.section,
         'campus_id': user.campus_id,
+        'is_cr': user.is_cr,
         'profile_picture': (
             request.build_absolute_uri(user.profile_picture.url)
             if user.profile_picture
@@ -824,3 +826,497 @@ def user_action(request, user_id, action):
         return JsonResponse({'error': 'Unknown action.'}, status=400)
 
     return JsonResponse({'user': _user_row(target, request)})
+
+
+# ---------------------------------------------------------------------------
+# Admin user profile (detail view + inline edit + force password reset)
+# ---------------------------------------------------------------------------
+
+def _user_profile_detail(user, request):
+    """Full profile payload for the admin user-detail page.
+
+    Includes all fields the profile page needs: personal info, academics,
+    registration metadata, and the profile-picture URL.
+    """
+    return {
+        'id': user.id,
+        'username': user.username,
+        'full_name': user.get_display_name(),
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'role': user.role,
+        'status': _user_status(user),
+        'is_cr': user.is_cr,
+        'department': user.department,
+        'batch': user.batch,
+        'section': user.section,
+        'campus_id': user.campus_id,
+        'phone_number': user.phone_number,
+        'date_joined': user.date_joined.isoformat(),
+        'profile_picture': (
+            request.build_absolute_uri(user.profile_picture.url)
+            if user.profile_picture
+            else None
+        ),
+    }
+
+
+@require_http_methods(['GET', 'PATCH'])
+def user_profile_api(request, user_id):
+    """Admin user detail + inline edit (GET / PATCH /api/users/<id>/).
+
+    GET  -> full user profile for the dedicated profile page.
+    PATCH -> updates allowed fields (full_name, email, department, batch,
+             section, campus_id, phone_number, role, is_cr). Returns the
+             refreshed user row. Admin only.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+    if request.user.role != User.Role.ADMIN:
+        return JsonResponse({'error': 'Admins only.'}, status=403)
+
+    target = get_object_or_404(User, pk=user_id)
+
+    if request.method == 'GET':
+        return JsonResponse({'user': _user_profile_detail(target, request)})
+
+    # PATCH — partial update of profile fields.
+    try:
+        payload = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'error': 'Send valid JSON.'}, status=400)
+
+    allowed_fields = {
+        'full_name', 'email', 'department', 'batch', 'section',
+        'campus_id', 'phone_number', 'role', 'is_cr',
+    }
+    updated = []
+    for field in allowed_fields:
+        if field not in payload:
+            continue
+        value = payload[field]
+        if field == 'full_name':
+            value = str(value).strip()[:100]
+            target.full_name = value
+            parts = value.split(' ', 1)
+            target.first_name = parts[0]
+            target.last_name = parts[1] if len(parts) > 1 else ''
+        elif field == 'email':
+            value = str(value).strip().lower()
+            try:
+                validate_email(value)
+            except ValidationError:
+                return JsonResponse({'error': 'Enter a valid email address.'}, status=400)
+            if User.objects.filter(email=value).exclude(pk=target.pk).exists():
+                return JsonResponse({'error': 'An account with this email already exists.'}, status=400)
+            target.email = value
+            target.username = value
+        elif field == 'role':
+            value = str(value).strip()
+            if value not in User.Role.values:
+                return JsonResponse({'error': 'Invalid role.'}, status=400)
+            if target.pk == request.user.pk and value != User.Role.ADMIN:
+                return JsonResponse({'error': 'You cannot demote your own admin account.'}, status=400)
+            target.role = value
+        elif field == 'is_cr':
+            target.is_cr = bool(value)
+        elif field == 'campus_id':
+            value = str(value).strip() or None
+            if value and User.objects.filter(campus_id=value).exclude(pk=target.pk).exists():
+                return JsonResponse({'error': 'This campus ID is already in use.'}, status=400)
+            target.campus_id = value
+        elif field in ('department', 'batch', 'section', 'phone_number'):
+            setattr(target, field, str(value).strip()[:50 if field == 'department' else 20 if field in ('batch', 'section') else 15])
+        updated.append(field)
+
+    if not updated:
+        return JsonResponse({'error': 'No valid fields to update.'}, status=400)
+
+    try:
+        target.save()
+    except IntegrityError:
+        return JsonResponse({'error': 'An account with this email already exists.'}, status=400)
+    return JsonResponse({'ok': True, 'user': _user_profile_detail(target, request)})
+
+
+@require_http_methods(['POST'])
+def user_force_reset_api(request, user_id):
+    """Force a password reset for a user (POST /api/users/<id>/force-reset/).
+
+    Generates a Django password-reset token and builds the reset URL that
+    would be emailed to the user. In a production setup this would trigger
+    ``PasswordResetForm.save()`` to actually dispatch the email; here we
+    return the token + URL so the admin can share it manually (or the
+    frontend can open it directly). Admin only.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+    if request.user.role != User.Role.ADMIN:
+        return JsonResponse({'error': 'Admins only.'}, status=403)
+
+    target = get_object_or_404(User, pk=user_id)
+
+    # Django's built-in password-reset token generator.
+    from django.contrib.auth.tokens import default_token_generator
+    token = default_token_generator.make_token(target)
+
+    # Build the frontend reset URL.  In production the domain should come
+    # from settings.ALLOWED_HOSTS or an env var; here we derive it from the
+    # request so it works in both dev (localhost) and deployed environments.
+    domain = request.get_host()
+    protocol = 'https' if request.is_secure() else 'http'
+    reset_url = f'{protocol}://{domain}/accounts/password-reset/{target.pk}/{token}/'
+
+    # Optionally actually send the email (when Django's email backend is
+    # configured).  Falls back to returning the URL for admin to share.
+    email_sent = False
+    try:
+        from django.core.mail import send_mail
+        subject = 'Campus Problem — Password Reset'
+        message = (
+            f'Hello {target.get_display_name()},\n\n'
+            f'An administrator has requested a password reset for your account.\n\n'
+            f'Click the link below to set a new password:\n'
+            f'{reset_url}\n\n'
+            f'If you did not request this, please contact the campus administrator.\n'
+        )
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [target.email], fail_silently=True)
+        email_sent = True
+    except Exception:
+        pass  # email backend not configured — return the URL instead
+
+    return JsonResponse({
+        'ok': True,
+        'message': f'Password reset link generated for {target.get_display_name()}.',
+        'reset_url': reset_url,
+        'email_sent': email_sent,
+        'user': _user_profile_detail(target, request),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Class Representative (CR) management
+# ---------------------------------------------------------------------------
+
+def _cr_row(user, request):
+    """Serialized row for the CR directory."""
+    return {
+        'id': user.id,
+        'full_name': user.get_display_name(),
+        'email': user.email,
+        'department': user.department,
+        'batch': user.batch,
+        'section': user.section,
+        'campus_id': user.campus_id,
+        'profile_picture': (
+            request.build_absolute_uri(user.profile_picture.url)
+            if user.profile_picture
+            else None
+        ),
+    }
+
+
+@require_http_methods(['GET'])
+def cr_students_api(request):
+    """Fetch students filterable by department, batch, and section.
+
+    GET /api/cr/students/?department=CSE&batch=10&section=A
+
+    Returns active students matching the given filters. Any signed-in user
+    may call this (it powers the CR picker in the cancel-class form and
+    similar widgets).
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+
+    department = request.GET.get('department', '').strip().upper()
+    batch = request.GET.get('batch', '').strip()
+    section = request.GET.get('section', '').strip().upper()
+
+    qs = User.objects.filter(
+        role=User.Role.STUDENT,
+        registration_status=User.RegistrationStatus.APPROVED,
+        is_active=True,
+    )
+    if department:
+        qs = qs.filter(department=department)
+    if batch:
+        qs = qs.filter(batch=batch)
+    if section:
+        qs = qs.filter(section=section)
+
+    students = qs.order_by('department', 'batch', 'section', 'first_name')
+    return JsonResponse({
+        'students': [_cr_row(s, request) for s in students],
+        'count': students.count(),
+    })
+
+
+@require_http_methods(['GET'])
+def cr_list_api(request):
+    """Fetch all users who currently hold the CR role.
+
+    GET /api/cr/
+
+    Returns every active student with ``is_cr=True``, grouped by
+    department / batch / section for easy display. Admin only.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+    if request.user.role != User.Role.ADMIN:
+        return JsonResponse({'error': 'Admins only.'}, status=403)
+
+    crs = User.objects.filter(
+        is_cr=True,
+        role=User.Role.STUDENT,
+        is_active=True,
+    ).order_by('department', 'batch', 'section', 'first_name')
+
+    return JsonResponse({
+        'crs': [_cr_row(cr, request) for cr in crs],
+        'count': crs.count(),
+    })
+
+
+@require_http_methods(['POST'])
+def cr_assign_api(request):
+    """Grant Class Representative status to a student.
+
+    POST /api/cr/assign/  {"user_id": 42}
+
+    Sets ``is_cr=True`` on the target student. Admin only. Rejects the
+    request when the target is not an active student.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+    if request.user.role != User.Role.ADMIN:
+        return JsonResponse({'error': 'Admins only.'}, status=403)
+
+    try:
+        payload = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'error': 'Send valid JSON.'}, status=400)
+
+    user_id = payload.get('user_id')
+    if not user_id:
+        return JsonResponse({'error': 'user_id is required.'}, status=400)
+
+    try:
+        target = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Student not found.'}, status=404)
+
+    if target.role != User.Role.STUDENT:
+        return JsonResponse(
+            {'error': 'Only students can be assigned as Class Representatives.'},
+            status=400,
+        )
+    if not target.is_active or target.registration_status != User.RegistrationStatus.APPROVED:
+        return JsonResponse(
+            {'error': 'Only active, approved students can be assigned as CRs.'},
+            status=400,
+        )
+    if target.is_cr:
+        return JsonResponse(
+            {'error': f'{target.get_display_name()} is already a Class Representative.'},
+            status=409,
+        )
+
+    target.is_cr = True
+    target.save(update_fields=['is_cr'])
+
+    return JsonResponse({
+        'ok': True,
+        'message': f'{target.get_display_name()} has been assigned as Class Representative.',
+        'user': _user_row(target, request),
+    })
+
+
+@require_http_methods(['POST'])
+def cr_revoke_api(request):
+    """Remove Class Representative status from a student.
+
+    POST /api/cr/revoke/  {"user_id": 42}
+
+    Sets ``is_cr=False`` on the target student. Admin only.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+    if request.user.role != User.Role.ADMIN:
+        return JsonResponse({'error': 'Admins only.'}, status=403)
+
+    try:
+        payload = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'error': 'Send valid JSON.'}, status=400)
+
+    user_id = payload.get('user_id')
+    if not user_id:
+        return JsonResponse({'error': 'user_id is required.'}, status=400)
+
+    try:
+        target = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Student not found.'}, status=404)
+
+    if not target.is_cr:
+        return JsonResponse(
+            {'error': f'{target.get_display_name()} is not a Class Representative.'},
+            status=409,
+        )
+
+    target.is_cr = False
+    target.save(update_fields=['is_cr'])
+
+    return JsonResponse({
+        'ok': True,
+        'message': f'{target.get_display_name()} has been removed from Class Representative role.',
+        'user': _user_row(target, request),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Meal Query — hostel meal cancellation requests
+# ---------------------------------------------------------------------------
+
+def _meal_cancellation_row(mc, request):
+    """Serialized row for the Meal Manager list view."""
+    return {
+        'id': mc.id,
+        'student_name': mc.student_name,
+        'student_id': mc.campus_student_id,
+        'department': mc.department,
+        'section': mc.section,
+        'date': mc.date.isoformat(),
+        'meal_type': mc.meal_type,
+        'meal_type_display': mc.get_meal_type_display(),
+        'status': mc.status,
+        'status_display': mc.get_status_display(),
+        'created_at': mc.created_at.isoformat(),
+    }
+
+
+@require_http_methods(['GET'])
+@transaction.non_atomic_requests
+def meal_cancellations_api(request):
+    """List meal cancellation requests.
+
+    GET /api/meal-query/
+
+    Students see only their own requests; admins and meal managers see all.
+    Filterable by status via ?status=pending.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+
+    qs = MealCancellation.objects.select_related('student')
+
+    # Students only see their own; admins/managers see everything.
+    if request.user.role == User.Role.STUDENT:
+        qs = qs.filter(student=request.user)
+
+    status_filter = request.GET.get('status', '').strip().lower()
+    if status_filter in dict(MealCancellation.Status.choices):
+        qs = qs.filter(status=status_filter)
+
+    cancellations = qs[:100]  # safety cap
+    return JsonResponse({
+        'cancellations': [_meal_cancellation_row(mc, request) for mc in cancellations],
+        'count': cancellations.count() if hasattr(cancellations, 'count') else len(cancellations),
+    })
+
+
+@require_http_methods(['POST'])
+def meal_cancellation_create_api(request):
+    """Submit a new meal cancellation request.
+
+    POST /api/meal-query/
+    {"date": "2026-08-22", "mealType": "lunch"}
+
+    The student's details (name, id, department, section) are pulled from
+    the authenticated user — no client-supplied student fields are trusted.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+    if request.user.role != User.Role.STUDENT:
+        return JsonResponse({'error': 'Only students can submit meal cancellation requests.'}, status=403)
+
+    try:
+        payload = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'error': 'Send valid JSON.'}, status=400)
+
+    date_str = payload.get('date', '').strip()
+    meal_type = payload.get('mealType', '').strip().lower()
+
+    if not date_str:
+        return JsonResponse({'error': 'Date is required.'}, status=400)
+    if meal_type not in dict(MealCancellation.MealType.choices):
+        return JsonResponse({'error': 'Invalid meal type. Choose lunch, dinner, or both.'}, status=400)
+
+    from datetime import date as date_cls
+    try:
+        target_date = date_cls.fromisoformat(date_str)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=400)
+
+    # Reject past dates.
+    if target_date < date_cls.today():
+        return JsonResponse({'error': 'Cannot cancel meals for past dates.'}, status=400)
+
+    # Prevent duplicate request for the same student + date + meal type.
+    existing = MealCancellation.objects.filter(
+        student=request.user,
+        date=target_date,
+        meal_type=meal_type,
+        status__in=[MealCancellation.Status.PENDING, MealCancellation.Status.APPROVED],
+    ).exists()
+    if existing:
+        return JsonResponse(
+            {'error': 'You already have a pending or approved request for this meal on this date.'},
+            status=409,
+        )
+
+    mc = MealCancellation.objects.create(
+        student=request.user,
+        student_name=request.user.get_display_name(),
+        campus_student_id=request.user.campus_id or '',
+        department=request.user.department or '',
+        section=request.user.section or '',
+        date=target_date,
+        meal_type=meal_type,
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'message': 'Meal cancellation request submitted successfully.',
+        'cancellation': _meal_cancellation_row(mc, request),
+    }, status=201)
+
+
+@require_http_methods(['DELETE'])
+def meal_cancellation_delete_api(request, cancellation_id):
+    """Cancel a pending meal cancellation request.
+
+    DELETE /api/meal-query/<id>/
+
+    Students can only delete their own pending requests. Admins can delete
+    any request.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Not authenticated.'}, status=401)
+
+    try:
+        mc = MealCancellation.objects.get(pk=cancellation_id)
+    except MealCancellation.DoesNotExist:
+        return JsonResponse({'error': 'Request not found.'}, status=404)
+
+    # Only the owner (pending) or admins can delete.
+    if request.user.role != User.Role.ADMIN and mc.student != request.user:
+        return JsonResponse({'error': 'Not authorized.'}, status=403)
+    if request.user.role == User.Role.STUDENT and mc.status != MealCancellation.Status.PENDING:
+        return JsonResponse({'error': 'Only pending requests can be withdrawn.'}, status=400)
+
+    mc.delete()
+    return JsonResponse({'ok': True, 'message': 'Request withdrawn successfully.'})

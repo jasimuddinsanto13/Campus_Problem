@@ -475,3 +475,98 @@ export function SeatIcon({ className }) {
     </svg>
   );
 }
+
+export function ChatIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 8.6 8.6 0 0 1-3.8-.9L3 20l1.2-4.6a8.2 8.2 0 0 1-1.2-4.4A8.4 8.4 0 0 1 11.5 2.8a8.4 8.4 0 0 1 9.5 8.7z" />
+    </svg>
+  );
+}
+
+export function SendIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <path d="M21 3 10.5 13.5" />
+      <path d="M21 3 14 21l-3.5-7.5L3 10z" />
+    </svg>
+  );
+}
+
+export function MicIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <rect x="9" y="2.5" width="6" height="11.5" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v3.5" />
+    </svg>
+  );
+}
+
+export function VolumeIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" />
+      <path d="M15 9a4 4 0 0 1 0 6" />
+      <path d="M17.5 6.5a7.5 7.5 0 0 1 0 11" />
+    </svg>
+  );
+}
+
+export function ShieldIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+export function KeyIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="m21 2-9.3 9.3" />
+      <path d="m17 6 4-4" />
+    </svg>
+  );
+}
+
+export function StarIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  );
+}
+
+export function MenuIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  );
+}
+
+export function MealIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <path d="M12 4.5c-4.7 0-8.5 3.8-8.5 8.5s3.8 8.5 8.5 8.5 8.5-3.8 8.5-8.5-3.8-8.5-8.5-8.5z" />
+      <path d="M8 11.5V7a2 2 0 0 1 4 0v1" />
+      <path d="M10 8v3.5" />
+      <path d="M15 10v4.5a2 2 0 0 0 2 2" />
+    </svg>
+  );
+}
+
+export function BusIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" {...base} className={className} aria-hidden="true">
+      <path d="M4 16V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v10" />
+      <path d="M4 16h16" />
+      <path d="M4 16v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h10v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2" />
+      <circle cx="7.5" cy="19.5" r="1.5" />
+      <circle cx="16.5" cy="19.5" r="1.5" />
+      <path d="M7.5 3v5M16.5 3v5" />
+    </svg>
+  );
+}

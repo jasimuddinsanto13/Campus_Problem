@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import { useUser, capitalizeName } from '../context/UserContext';
 import CancelClassModal from '../components/CancelClassModal';
 import NoticeBoard from '../components/NoticeBoard';
 import WeeklyScheduleGrid from '../components/WeeklyScheduleGrid';
@@ -129,8 +129,8 @@ export default function FacultyDashboard() {
 
       {/* Greeting — flows straight into the summary cards (no action clutter) */}
       <div>
-        <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-charcoal lg:text-[34px]">
-          Good to see you, {fullName || 'there'}.
+        <h1 className="text-[22px] font-extrabold leading-tight tracking-tight text-charcoal sm:text-[28px] lg:text-[34px]">
+          Good to see you, {capitalizeName(fullName) || 'there'}.
         </h1>
         <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-gray-500">
           Track your assigned classes, check the weekly routine for your

@@ -8,6 +8,7 @@ import {
   TeacherIcon,
   AccountIcon,
 } from '../components/Icons';
+import { useUser, capitalizeName } from '../context/UserContext';
 
 // Live numbers from GET /api/users/ (admin directory). Falls back to these
 // on load errors so the dashboard never shows a broken card.
@@ -15,6 +16,7 @@ const FALLBACK = { pending: 0, students: 0, faculty: 0, total: 0, rejected: 0 };
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { fullName } = useUser();
   const [stats, setStats] = useState(FALLBACK);
 
   // New pending registrations appear here automatically (Faculty & Student
@@ -60,6 +62,7 @@ export default function Dashboard() {
       accent: 'border-coral',
       badge: 'bg-lime text-charcoal',
       icon: HourglassIcon,
+      to: '/admin/users?tab=pending',
     },
     {
       label: 'Students',
@@ -68,6 +71,7 @@ export default function Dashboard() {
       accent: 'border-lime',
       badge: 'bg-sky-100 text-sky-700',
       icon: GraduationIcon,
+      to: '/admin/users?tab=student',
     },
     {
       label: 'Faculty',
@@ -76,6 +80,7 @@ export default function Dashboard() {
       accent: 'border-lime',
       badge: 'bg-yellow-100 text-yellow-700',
       icon: TeacherIcon,
+      to: '/admin/users?tab=teacher',
     },
     {
       label: 'Total accounts',
@@ -84,6 +89,7 @@ export default function Dashboard() {
       accent: 'border-lime',
       badge: 'bg-violet-100 text-violet-700',
       icon: AccountIcon,
+      to: '/admin/users',
     },
   ];
 
@@ -97,8 +103,8 @@ export default function Dashboard() {
       {/* Greeting + description + actions */}
       <div className="mt-3 flex flex-wrap items-end justify-between gap-5">
         <div className="min-w-0">
-          <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-charcoal lg:text-[34px]">
-            Good to see you, santo.
+          <h1 className="text-[22px] font-extrabold leading-tight tracking-tight text-charcoal sm:text-[28px] lg:text-[34px]">
+            Good to see you, {capitalizeName(fullName) || 'there'}.
           </h1>
           <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-gray-500">
             Moderate registrations, monitor the campus pulse, and keep every
@@ -106,7 +112,7 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => window.location.reload()}
@@ -127,32 +133,32 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Analytics cards */}
+      {/* Analytics cards — each navigates to the filtered Users page */}
       <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {STATS.map((stat) => {
           const Icon = stat.icon;
           return (
-            <article
+            <button
               key={stat.label}
-              className={`rounded-2xl border border-black/5 border-t-4 ${stat.accent} bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg`}
+              type="button"
+              onClick={() => navigate(stat.to)}
+              className={`group flex h-full w-full items-start justify-between gap-3 rounded-2xl border border-black/5 border-t-4 ${stat.accent} bg-white p-5 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg cursor-pointer`}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
-                    {stat.label}
-                  </p>
-                  <p className="mt-2 text-[32px] font-extrabold leading-none tracking-tight text-charcoal">
-                    {stat.value}
-                  </p>
-                  <p className="mt-2 text-[12px] text-gray-500">{stat.sub}</p>
-                </div>
-                <span
-                  className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${stat.badge}`}
-                >
-                  <Icon className="h-5 w-5" />
+              <span className="min-w-0">
+                <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                  {stat.label}
                 </span>
-              </div>
-            </article>
+                <span className="mt-2 block text-[32px] font-extrabold leading-none tracking-tight text-charcoal">
+                  {stat.value}
+                </span>
+                <span className="mt-2 block text-[12px] text-gray-500">{stat.sub}</span>
+              </span>
+              <span
+                className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl transition duration-200 group-hover:scale-110 ${stat.badge}`}
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+            </button>
           );
         })}
       </div>

@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import Avatar from './Avatar';
+import ConfirmDialog from './ConfirmDialog';
 import {
   DashboardIcon,
   RadioActiveIcon,
@@ -15,6 +17,8 @@ import {
   LogoutIcon,
   CalendarXIcon,
   AlertOctagonIcon,
+  MealIcon,
+  BusIcon,
 } from './Icons';
 
 // Navigation per portal. Each item is a real link — the address bar updates
@@ -54,12 +58,14 @@ const PORTALS = {
       { id: 'cancellations', path: '/student/cancellations', label: 'Cancellations', icon: AlertOctagonIcon },
       { id: 'room-booking', path: '/student/room-booking', label: 'Room booking', icon: RoomBookingIcon },
       { id: 'issue-desk', path: '/student/issue-desk', label: 'Issue desk', icon: HomeIcon },
+      { id: 'meal-query', path: '/student/meal-query', label: 'Meal query', icon: MealIcon },
+      { id: 'bus-navigate', path: '/student/bus-navigate', label: 'Bus navigate', icon: BusIcon },
       { id: 'settings', path: '/student/settings', label: 'Settings', icon: GearIcon },
     ],
   },
 };
 
-export default function Sidebar({ variant = 'admin', collapsed, onToggle, onExpand }) {
+export default function Sidebar({ variant = 'admin', collapsed, mobileOpen = false, onToggle, onExpand, onMobileClose }) {
   // Live profile from GET /api/profile/ — avatar + name persist across reloads.
   const { fullName, profilePicture } = useUser();
   const portal = PORTALS[variant] || PORTALS.admin;
@@ -73,18 +79,44 @@ export default function Sidebar({ variant = 'admin', collapsed, onToggle, onExpa
     )?.id ?? 'dashboard';
 
   const handleNavClick = () => {
-    // Expand the collapsed sidebar when a nav item is clicked.
-    if (collapsed) onExpand();
+    // On desktop: expand the collapsed sidebar when a nav item is clicked.
+    // On mobile: close the overlay sidebar.
+    if (mobileOpen) onMobileClose?.();
+    else if (collapsed) onExpand();
+  };
+
+  // Logout confirmation — an accidental click no longer ends the session.
+  // The styled ConfirmDialog asks first; only "Yes, Logout" navigates to
+  // /accounts/logout/. The <a> keeps its href as a no-JS fallback.
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const handleLogout = (e) => {
+    e.preventDefault();
+    setLogoutOpen(true);
+  };
+  const confirmLogout = () => {
+    window.location.href = '/accounts/logout/';
   };
 
   const ArrowIcon = collapsed ? ChevronRightIcon : ChevronLeftIcon;
 
   return (
-    <aside
-      className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-black/[0.06] bg-canvas transition-[width] duration-300 ease-in-out ${
-        collapsed ? 'w-[84px]' : 'w-[272px]'
-      }`}
-    >
+    <>
+      {/* Mobile backdrop overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm md:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-black/[0.06] bg-canvas transition-[width] duration-300 ease-in-out
+          max-md:-translate-x-full max-md:transition-transform max-md:duration-300
+          ${mobileOpen ? 'max-md:translate-x-0' : ''}
+          ${collapsed ? 'w-[84px]' : 'w-[272px]'}
+        `}
+      >
       {/* Brand */}
       <div
         className={`flex h-[72px] shrink-0 items-center gap-3 transition-[padding] duration-300 ${
@@ -181,6 +213,7 @@ export default function Sidebar({ variant = 'admin', collapsed, onToggle, onExpa
         <a
           href="/accounts/logout/"
           title="Log out"
+          onClick={handleLogout}
           className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 transition-all duration-200 hover:bg-rose-50 hover:text-rose-600 ${
             collapsed ? 'justify-center px-0' : ''
           }`}
@@ -190,16 +223,28 @@ export default function Sidebar({ variant = 'admin', collapsed, onToggle, onExpa
         </a>
       </div>
 
-      {/* Floating collapse arrow at the middle of the menu */}
+      {/* Floating collapse arrow — desktop only */}
       <button
         type="button"
         onClick={onToggle}
         aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
         title={collapsed ? 'Expand menu' : 'Collapse menu'}
-        className="absolute right-[-13px] top-1/2 z-40 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full border border-black/[0.06] bg-white text-gray-500 shadow-lg shadow-black/10 transition hover:scale-105 hover:text-charcoal hover:shadow-xl"
+        className="absolute right-[-13px] top-1/2 z-40 hidden h-8 w-8 -translate-y-1/2 grid place-items-center rounded-full border border-black/[0.06] bg-white text-gray-500 shadow-lg shadow-black/10 transition hover:scale-105 hover:text-charcoal hover:shadow-xl md:grid"
       >
         <ArrowIcon className="h-4 w-4" />
       </button>
+
+      {/* Logout confirmation modal — shared across every portal */}
+      <ConfirmDialog
+        open={logoutOpen}
+        tone="success"
+        title="Are you sure you want to logout?"
+        message="Your session will be ended and you'll need to sign in again to access the dashboard."
+        confirmLabel="Yes, Logout"
+        onConfirm={confirmLogout}
+        onCancel={() => setLogoutOpen(false)}
+      />
     </aside>
+    </>
   );
 }

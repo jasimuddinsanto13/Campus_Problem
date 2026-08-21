@@ -9,14 +9,36 @@ export const ISSUE_CATEGORIES = [
   { id: 'other', label: 'Other' },
 ];
 
-/** Buildings offered by the location dropdown on the form. */
-export const ISSUE_BUILDINGS = [
-  'Academic Building 1',
-  'Academic Building 2',
-  'Campus Grounds',
-  'Library',
-  'Cafeteria',
+/**
+ * Buildings offered by the location dropdown on the form, grouped into
+ * <optgroup>s for better UX. Each option's value is the plain location
+ * string (matches the backend's free-text location field).
+ */
+export const ISSUE_BUILDING_GROUPS = [
+  {
+    label: 'Academic Buildings',
+    options: ['Academic Building 1', 'Academic Building 2'],
+  },
+  {
+    label: 'Halls & Quarters',
+    options: ['Boys Hall 1', 'Boys Hall 2', 'Girls Hall', 'Staff Quarters'],
+  },
+  {
+    label: 'Food & Dining',
+    options: ['Cafeteria', 'Canteen'],
+  },
+  {
+    label: 'Open Areas & Fields',
+    options: ['Cafe Field', 'Central Field'],
+  },
+  {
+    label: 'Facilities',
+    options: ['Library', 'Theatre'],
+  },
 ];
+
+/** Flat list of every location (kept for any code expecting a plain array). */
+export const ISSUE_BUILDINGS = ISSUE_BUILDING_GROUPS.flatMap((g) => g.options);
 
 /** Files the attachment uploader accepts (JPG/PNG photos, PDF/DOCX docs). */
 export const ACCEPTED_ATTACHMENT_TYPES = [

@@ -11,6 +11,7 @@ const FALLBACK = {
   department: '',
   batch: '',
   section: '',
+  isCr: false,
   profilePicture: null,
 };
 
@@ -26,6 +27,15 @@ export function initialsOf(name) {
       .join('')
       .toUpperCase() || 'SA'
   );
+}
+
+/** "santo" -> "Santo" · "JASIM UDDIN SANTO" -> "Jasim uddin santo".
+ *  Capitalizes the first letter of the name and lowercases the rest.
+ *  Returns '' for empty/whitespace-only input. */
+export function capitalizeName(name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return '';
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
 }
 
 export function UserProvider({ children }) {
@@ -51,6 +61,7 @@ export function UserProvider({ children }) {
           department: (p && p.department) || '',
           batch: (p && p.batch) || '',
           section: (p && p.section) || '',
+          isCr: !!(p && p.is_cr),
           profilePicture: (p && p.profile_picture) || null,
           loading: false,
         });

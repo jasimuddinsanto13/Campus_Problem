@@ -217,7 +217,7 @@ export default function FacultyRoutines() {
 
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-[28px] font-extrabold leading-tight tracking-tight text-charcoal lg:text-[32px]">
+            <h1 className="text-[20px] font-extrabold leading-tight tracking-tight text-charcoal sm:text-[28px] lg:text-[32px]">
               {activeTab === 'my-routine'
                 ? 'My Teaching Schedule'
                 : 'Browse Master Routines by Department & Batch'}

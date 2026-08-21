@@ -45,6 +45,12 @@ class User(AbstractUser):
     # actually reads); this convenience field mirrors the latest registered
     # token so the profile API can expose / update it directly.
     fcm_token = models.TextField(blank=True, null=True)
+    # Class Representative flag — granted by admins to students who act as
+    # the official liaison for their department / batch / section. CRs are
+    # still regular students (same dashboard, same permissions) but the
+    # flag surfaces a badge in the directory and can gate future features
+    # (e.g. priority notice posting, batch-wide announcements).
+    is_cr = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = 'user'
@@ -494,3 +500,52 @@ class Notice(models.Model):
         if scope:
             audience += f' ({scope})'
         return f'{self.title} — {audience} ({self.get_priority_display()})'
+
+
+
+class MealCancellation(models.Model):
+    """A student request to cancel a hostel meal for a specific date.
+
+    Students submit these from the Meal Query page; the Meal Manager
+    (another student with manager privileges) reviews them from a
+    separate dashboard.
+    """
+
+    class MealType(models.TextChoices):
+        LUNCH = 'lunch', 'Lunch'
+        DINNER = 'dinner', 'Dinner'
+        BOTH = 'both', 'Both'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+
+    student = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='meal_cancellations',
+    )
+    student_name = models.CharField(max_length=100)
+    campus_student_id = models.CharField(max_length=30, blank=True)
+    department = models.CharField(max_length=50, blank=True)
+    section = models.CharField(max_length=10, blank=True)
+    date = models.DateField()
+    meal_type = models.CharField(
+        max_length=10, choices=MealType.choices, default=MealType.LUNCH
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'meal cancellation'
+        verbose_name_plural = 'meal cancellations'
+
+    def __str__(self):
+        return (
+            f'{self.student_name} · {self.get_meal_type_display()} · '
+            f'{self.date} ({self.get_status_display()})'
+        )

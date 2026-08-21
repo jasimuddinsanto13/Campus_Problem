@@ -20,15 +20,20 @@ cookie belonging to an active teacher or admin account — students are
 rejected with 403 server-side (never trusted client-side UI state).
 """
 
+import base64
+import os
+import struct
 from datetime import datetime, time as dt_time
 from datetime import date, timedelta, timezone
 from typing import Optional
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from .config import BASE_DIR
 from .database import get_db
 from .models import Issue, Room, RoomBooking, Routine
 from .schemas import (
@@ -38,6 +43,12 @@ from .schemas import (
     VALID_STATUSES,
     BookingCreate,
     BookingOut,
+    ChatRequest,
+    ChatResponse,
+    ChatSpeakRequest,
+    ChatSpeakResponse,
+    ChatTranscribeRequest,
+    ChatTranscribeResponse,
     IssueOut,
     RoomAvailability,
     RoomOut,
@@ -476,3 +487,178 @@ def create_booking(payload: BookingCreate, request: Request, db: Session = Depen
         ).model_dump(mode='json'),
         'message': f'{room.room_number} locked for {payload.start_time:%H:%M}-{payload.end_time:%H:%M}.',
     }
+
+
+# ---------------------------------------------------------------------------
+# AI chat assistant (Google Gemini — official google-genai SDK)
+# ---------------------------------------------------------------------------
+
+# Rules the assistant must follow on every turn. In the current Interactions
+# API, system_instruction is scoped to the interaction, so it is re-sent with
+# each request rather than set once on the client.
+CHAT_SYSTEM_INSTRUCTION = (
+    'You are Campus Assistant, the official chatbot of the Campus Problem '
+    'university portal. You help students, faculty and admins with questions '
+    'about weekly routines, room booking and availability, notices, class '
+    'cancellations and campus issue reports. Be concise, friendly and '
+    'accurate. If you do not know something about this specific platform, say '
+    'so instead of guessing — never invent room numbers, schedules or bookings.'
+)
+
+# Fastest, cost-efficient chat model — gemini-2.5-flash and other 2.x/1.x
+# models are legacy and deprecated; the 3.x lite models are the supported,
+# fastest replacement for lightweight chat.
+CHAT_MODEL = 'gemini-3.1-flash-lite'
+
+# Spoken replies use the dedicated TTS model (speech generation). The chosen
+# voice comes from the prebuilt output voices (e.g. Kore=Firm, Puck=Upbeat,
+# Achird=Friendly, Sulafat=Warm).
+CHAT_TTS_MODEL = 'gemini-3.1-flash-tts-preview'
+CHAT_TTS_VOICE = 'Achird'  # Friendly
+
+
+def _pcm_to_wav(pcm: bytes, sample_rate: int = 24000, channels: int = 1, sample_width: int = 2) -> bytes:
+    """Wrap raw PCM16 audio in a RIFF/WAVE container so browsers can play it.
+
+    The TTS model returns bare PCM (24000 Hz, mono, 16-bit) — the same shape
+    the Gemini docs show being written straight into a .wav file.
+    """
+    data_size = len(pcm)
+    header = struct.pack(
+        '<4sI4s4sIHHIIHH4sI',
+        b'RIFF', 36 + data_size, b'WAVE',
+        b'fmt ', 16, 1, channels, sample_rate,
+        sample_rate * channels * sample_width,
+        channels * sample_width, sample_width * 8, b'data', data_size,
+    )
+    return header + pcm
+
+_genai_client = None
+_genai_client_key = None
+
+
+def _gemini_api_key() -> str:
+    """Current GEMINI_API_KEY, refreshing the .env files on every call.
+
+    ``load_dotenv(override=True)`` makes .env the live source of truth, so a
+    key change applies on the next message without restarting the server.
+    """
+    load_dotenv(BASE_DIR / '.env', override=True)
+    load_dotenv(BASE_DIR.parent / '.env', override=True)
+    return os.environ.get('GEMINI_API_KEY', '').strip()
+
+
+def _gemini_client():
+    """Lazily-built GoogleGenAI client (official ``google-genai`` SDK).
+
+    Returns None when GEMINI_API_KEY is missing so the rest of the API keeps
+    working — the widget then gets a clean 503 instead of a crash. The client
+    is rebuilt whenever the key changes.
+    """
+    global _genai_client, _genai_client_key
+    api_key = _gemini_api_key()
+    if not api_key:
+        _genai_client, _genai_client_key = None, None
+        return None
+    if _genai_client is not None and _genai_client_key == api_key:
+        return _genai_client
+    from google import genai
+
+    _genai_client = genai.Client(api_key=api_key)
+    _genai_client_key = api_key
+    return _genai_client
+
+
+@app.post('/api/chat', response_model=ChatResponse)
+def chat(payload: ChatRequest):
+    """One turn of the chat widget.
+
+    Sends the user's message (plus the previous interaction id so Gemini
+    maintains conversation history server-side) and returns the reply plus the
+    new interaction id to chain the next turn. Defined as a plain ``def`` so
+    FastAPI runs the blocking Gemini call in a worker thread.
+    """
+    client = _gemini_client()
+    if client is None:
+        raise HTTPException(
+            status_code=503,
+            detail='The chat assistant is not configured (GEMINI_API_KEY missing).',
+        )
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail='Message is required.')
+    try:
+        interaction = client.interactions.create(
+            model=CHAT_MODEL,
+            input=message,
+            system_instruction=CHAT_SYSTEM_INSTRUCTION,
+            previous_interaction_id=payload.interaction_id or None,
+        )
+    except Exception as exc:  # network / quota / auth failures -> 502
+        raise HTTPException(status_code=502, detail=f'Gemini request failed: {exc}')
+    return ChatResponse(
+        reply=interaction.output_text or '',
+        interaction_id=interaction.id,
+    )
+
+
+@app.post('/api/chat/transcribe', response_model=ChatTranscribeResponse)
+def transcribe_chat_audio(payload: ChatTranscribeRequest):
+    """Voice input: transcribe recorded audio (base64 WAV) to text.
+
+    The audio goes to Gemini as an inline part (under the 20 MB limit) on the
+    same chat model; the transcript is then sent through the normal /api/chat
+    flow by the widget, so conversation history is preserved.
+    """
+    client = _gemini_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail='The chat assistant is not configured (GEMINI_API_KEY missing).')
+    try:
+        audio_bytes = base64.b64decode(payload.audio_base64, validate=False)
+    except Exception:
+        raise HTTPException(status_code=400, detail='audio_base64 is not valid base64.')
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail='Audio payload is empty.')
+    try:
+        interaction = client.interactions.create(
+            model=CHAT_MODEL,
+            input=[
+                {'type': 'text', 'text': 'Transcribe the speech in this audio exactly. Output only the transcript, no commentary.'},
+                {'type': 'audio', 'data': base64.b64encode(audio_bytes).decode('ascii'), 'mime_type': payload.mime_type},
+            ],
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f'Gemini transcription failed: {exc}')
+    transcript = (interaction.output_text or '').strip()
+    if not transcript:
+        raise HTTPException(status_code=502, detail='No speech was recognized in the audio.')
+    return ChatTranscribeResponse(transcript=transcript)
+
+
+@app.post('/api/chat/speak', response_model=ChatSpeakResponse)
+def speak_chat_text(payload: ChatSpeakRequest):
+    """Voice output: turn text into speech with the Gemini TTS model.
+
+    Returns a base64 WAV (24000 Hz PCM wrapped in a WAVE header) the browser
+    can play directly via an <audio> blob URL.
+    """
+    client = _gemini_client()
+    if client is None:
+        raise HTTPException(status_code=503, detail='The chat assistant is not configured (GEMINI_API_KEY missing).')
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail='Text is required.')
+    try:
+        interaction = client.interactions.create(
+            model=CHAT_TTS_MODEL,
+            input=text[:5000],
+            response_format={'type': 'audio'},
+            generation_config={'speech_config': [{'voice': CHAT_TTS_VOICE}]},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f'Gemini speech generation failed: {exc}')
+    audio = getattr(interaction, 'output_audio', None)
+    if audio is None or not getattr(audio, 'data', None):
+        raise HTTPException(status_code=502, detail='The TTS model returned no audio.')
+    pcm = base64.b64decode(audio.data)
+    return ChatSpeakResponse(audio_base64=base64.b64encode(_pcm_to_wav(pcm)).decode('ascii'))

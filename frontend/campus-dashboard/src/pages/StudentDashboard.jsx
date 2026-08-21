@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import { useUser, capitalizeName } from '../context/UserContext';
 import CancellationBanner from '../components/CancellationBanner';
 import NoticeBoard from '../components/NoticeBoard';
 import {
@@ -33,8 +33,8 @@ export default function StudentDashboard() {
       {/* Greeting */}
       <div className="mt-3 flex flex-wrap items-end justify-between gap-5">
         <div className="min-w-0">
-          <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-charcoal lg:text-[34px]">
-            Hi {fullName || 'there'} 👋
+          <h1 className="text-[22px] font-extrabold leading-tight tracking-tight text-charcoal sm:text-[28px] lg:text-[34px]">
+            Hi {capitalizeName(fullName) || 'there'} 👋
           </h1>
           <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-gray-500">
             {context} — check your weekly routine, find free classrooms, and

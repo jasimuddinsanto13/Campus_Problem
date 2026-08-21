@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
+import ChatWidget from './components/ChatWidget';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import { useUser } from './context/UserContext';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
+import UserProfile from './pages/UserProfile';
 import Routines from './pages/Routines';
 import RoutineEdit from './pages/RoutineEdit';
 import RoutineDownload from './pages/RoutineDownload';
@@ -19,6 +21,8 @@ import AdminIssueDesk from './pages/AdminIssueDesk';
 import FacultyCancellations from './pages/FacultyCancellations';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentCancellations from './pages/StudentCancellations';
+import MealQuery from './pages/MealQuery';
+import BusNavigate from './pages/BusNavigate';
 
 const SIDEBAR_W = { expanded: 272, collapsed: 84 };
 
@@ -41,13 +45,27 @@ const PORTAL_LABEL = {
 const PAGE_LABELS = [
   { test: (p) => p.includes('/routines'), label: 'Routines' },
   { test: (p) => p.includes('/cancellations'), label: 'Class cancellations' },
+  { test: (p) => /\/users\/\d+/.test(p), label: 'User Profile' },
   { test: (p) => p.endsWith('/users'), label: 'Users' },
   { test: (p) => p.endsWith('/issue-desk'), label: 'Issue desk' },
   { test: (p) => p.endsWith('/room-booking'), label: 'Room booking' },
   { test: (p) => p.endsWith('/notices'), label: 'Notice board' },
+  { test: (p) => p.includes('/meal-query'), label: 'Meal query' },
+  { test: (p) => p.includes('/bus-navigate'), label: 'Bus tracker' },
   { test: (p) => p.endsWith('/settings'), label: 'Settings' },
   { test: () => true, label: 'Dashboard' },
 ];
+
+/**
+ * Redirect that preserves the current URL's query string — used for
+ * legacy admin routes like /routines/edit?dept=...&batch=...&sec=...
+ * where the Wizard passes selection via search params.
+ */
+function RedirectWithSearch({ to }) {
+  const [searchParams] = useSearchParams();
+  const qs = searchParams.toString();
+  return <Navigate to={qs ? `${to}?${qs}` : to} replace />;
+}
 
 function PortalLoader() {
   return (
@@ -79,6 +97,7 @@ function RoleHomeRedirect() {
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { pathname } = useLocation();
 
   // Which portal shell is active is derived from the URL — the persistent
@@ -93,30 +112,29 @@ export default function App() {
   const pageLabel = PAGE_LABELS.find((r) => r.test(pathname))?.label ?? 'Dashboard';
 
   return (
-    <div className="min-h-screen bg-canvas">
+    <div className="min-h-screen bg-canvas" style={{ '--sidebar-w': `${width}px` }}>
       {/* Persistent shared layout shell — variant follows the current portal */}
       <Sidebar
         variant={variant}
         collapsed={collapsed}
+        mobileOpen={mobileOpen}
         onToggle={() => setCollapsed((v) => !v)}
         onExpand={() => setCollapsed(false)}
+        onMobileClose={() => setMobileOpen(false)}
       />
 
-      <div
-        className="transition-[margin-left] duration-300 ease-in-out"
-        style={{ marginLeft: width }}
-      >
-        <Topbar portalLabel={PORTAL_LABEL[variant]} pageLabel={pageLabel} />
+      <div className="transition-[margin] duration-300 ease-in-out md:ml-[var(--sidebar-w)]">
+        <Topbar portalLabel={PORTAL_LABEL[variant]} pageLabel={pageLabel} onMenuToggle={() => setMobileOpen((v) => !v)} />
 
-        <main className="px-5 pb-10 pt-6 lg:px-8">
+        <main className="px-3 pb-10 pt-4 sm:px-5 md:px-5 lg:px-8">
           <Routes>
             {/* Entry point + legacy admin URLs (bookmarks keep working) */}
             <Route path="/" element={<RoleHomeRedirect />} />
             <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="/users" element={<Navigate to="/admin/users" replace />} />
             <Route path="/routines" element={<Navigate to="/admin/routines" replace />} />
-            <Route path="/routines/edit" element={<Navigate to="/admin/routines/edit" replace />} />
-            <Route path="/routines/download" element={<Navigate to="/admin/routines/download" replace />} />
+            <Route path="/routines/edit" element={<RedirectWithSearch to="/admin/routines/edit" />} />
+            <Route path="/routines/download" element={<RedirectWithSearch to="/admin/routines/download" />} />
             <Route path="/issue-desk" element={<Navigate to="/admin/issue-desk" replace />} />
             <Route path="/room-booking" element={<Navigate to="/admin/room-booking" replace />} />
             <Route path="/notices" element={<Navigate to="/admin/notices" replace />} />
@@ -125,6 +143,7 @@ export default function App() {
             {/* ---- Admin portal (/admin/*) ---- */}
             <Route path="/admin/dashboard" element={<RoleGate role="admin"><Dashboard /></RoleGate>} />
             <Route path="/admin/users" element={<RoleGate role="admin"><Users /></RoleGate>} />
+            <Route path="/admin/users/:userId" element={<RoleGate role="admin"><UserProfile /></RoleGate>} />
             <Route path="/admin/routines" element={<RoleGate role="admin"><Routines /></RoleGate>} />
             <Route path="/admin/routines/edit" element={<RoleGate role="admin"><RoutineEdit /></RoleGate>} />
             <Route path="/admin/routines/download" element={<RoleGate role="admin"><RoutineDownload /></RoleGate>} />
@@ -157,12 +176,17 @@ export default function App() {
             <Route path="/student/cancellations" element={<RoleGate role="student"><StudentCancellations /></RoleGate>} />
             <Route path="/student/room-booking" element={<RoleGate role="student"><FacultyRoomBooking /></RoleGate>} />
             <Route path="/student/issue-desk" element={<RoleGate role="student"><FacultyIssueDesk /></RoleGate>} />
+            <Route path="/student/meal-query" element={<RoleGate role="student"><MealQuery /></RoleGate>} />
+            <Route path="/student/bus-navigate" element={<RoleGate role="student"><BusNavigate /></RoleGate>} />
             <Route path="/student/settings" element={<RoleGate role="student"><Settings /></RoleGate>} />
 
             <Route path="*" element={<RoleHomeRedirect />} />
           </Routes>
         </main>
       </div>
+
+      {/* Floating Gemini assistant — visible on every portal dashboard */}
+      <ChatWidget />
     </div>
   );
 }
