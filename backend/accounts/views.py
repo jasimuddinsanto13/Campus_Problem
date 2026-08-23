@@ -32,6 +32,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from PIL import Image
 
@@ -297,6 +298,60 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('login')
+
+
+# ---------------------------------------------------------------------------
+# JSON API login / logout — used by the React frontend on a different origin.
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_login(request):
+    """JSON login endpoint for the React SPA (cross-origin).
+
+    Accepts JSON body: { email, password, role }
+    Sets a session cookie (SameSite=None; Secure in production) and returns
+    the user profile on success.
+    """
+    try:
+        payload = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'error': 'Invalid JSON.'}, status=400)
+
+    identifier = (payload.get('email') or payload.get('username') or '').strip().lower()
+    password = payload.get('password', '')
+    role = payload.get('role', '')
+
+    if not identifier or not password:
+        return JsonResponse({'error': 'Email/username and password are required.'}, status=400)
+    if role not in ROLE_LABELS:
+        return JsonResponse({'error': 'Please select your role.'}, status=400)
+
+    user = User.objects.filter(username=identifier).first() or User.objects.filter(email=identifier).first()
+
+    if user is None:
+        return JsonResponse({'error': 'No account found with that email or username.'}, status=401)
+    if user.role != role:
+        return JsonResponse(
+            {'error': f'That account is registered as {ROLE_LABELS[user.role]}. Select the matching role.'},
+            status=403,
+        )
+    if user.registration_status == User.RegistrationStatus.PENDING:
+        return JsonResponse({'error': 'Your registration is still pending admin approval.'}, status=403)
+    if user.registration_status == User.RegistrationStatus.REJECTED:
+        return JsonResponse({'error': 'Your registration was rejected. Contact the campus administrator.'}, status=403)
+    if not user.check_password(password):
+        return JsonResponse({'error': 'Incorrect password. Try again.'}, status=401)
+
+    login(request, user, backend=AUTH_BACKEND)
+    return JsonResponse({'ok': True, 'profile': _profile_payload(user, request)})
+
+
+@require_http_methods(['POST'])
+def api_logout(request):
+    """JSON logout endpoint — clears the session and returns 200."""
+    logout(request)
+    return JsonResponse({'ok': True})
 
 
 @login_required

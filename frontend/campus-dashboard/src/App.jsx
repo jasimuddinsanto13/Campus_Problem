@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import ChatWidget from './components/ChatWidget';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
@@ -23,7 +23,8 @@ import StudentDashboard from './pages/StudentDashboard';
 import StudentCancellations from './pages/StudentCancellations';
 import MealQuery from './pages/MealQuery';
 import BusNavigate from './pages/BusNavigate';
-import { API_BASE_URL } from './lib/api';
+import { API_BASE_URL, apiUrl } from './lib/api';
+import { getCsrfToken } from './lib/csrf';
 
 const SIDEBAR_W = { expanded: 272, collapsed: 84 };
 
@@ -77,29 +78,116 @@ function PortalLoader() {
 }
 
 function FrontendLoginRedirect() {
-  const backendLoginUrl = `${API_BASE_URL}/accounts/login/`;
+  const navigate = useNavigate();
+  const { updateProfile } = useUser();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('student');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(apiUrl('/api/auth/login/'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken() || '',
+        },
+        body: JSON.stringify({ email, password, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Login failed.');
+        return;
+      }
+      // Store role and update context so RoleGate lets us through.
+      const p = data.profile || {};
+      updateProfile({
+        id: p.id,
+        fullName: p.full_name || '',
+        username: p.username || '',
+        email: p.email || '',
+        role: p.role || role,
+        department: p.department || '',
+        batch: p.batch || '',
+        section: p.section || '',
+        isCr: !!p.is_cr,
+        profilePicture: p.profile_picture || null,
+      });
+      const roleHome = { admin: '/admin/dashboard', teacher: '/faculty/dashboard', student: '/student/dashboard' };
+      navigate(roleHome[p.role || role] || '/student/dashboard');
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="grid min-h-[60vh] place-items-center px-4">
-      <div className="w-full max-w-md rounded-3xl border border-black/5 bg-white p-8 text-center shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+      <div className="w-full max-w-md rounded-3xl border border-black/5 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
         <div className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-full bg-lime text-2xl font-black text-charcoal shadow-sm shadow-lime/40">
           CP
         </div>
-        <h1 className="text-3xl font-black tracking-tight text-charcoal">Sign in</h1>
-        <p className="mt-3 text-sm text-gray-600">
-          Your session has expired or you are not signed in yet.
+        <h1 className="text-center text-3xl font-black tracking-tight text-charcoal">Sign in</h1>
+        <p className="mt-3 text-center text-sm text-gray-600">
+          Welcome back! Please enter your credentials.
         </p>
 
-        <a
-          href={backendLoginUrl}
-          className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-lime px-4 py-3 text-sm font-semibold text-charcoal transition hover:brightness-95"
-        >
-          Continue to backend login
-        </a>
+        {error && (
+          <div className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        )}
 
-        <p className="mt-4 text-xs text-gray-500">
-          This keeps the app on the frontend domain until you choose to sign in.
-        </p>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Email or Username</label>
+            <input
+              type="text"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">I am a</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30"
+            >
+              <option value="student">Student</option>
+              <option value="teacher">Faculty</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-lime px-4 py-3 text-sm font-semibold text-charcoal transition hover:brightness-95 disabled:opacity-50"
+          >
+            {loading ? 'Signing in...' : 'Sign in'}
+          </button>
+        </form>
       </div>
     </div>
   );
