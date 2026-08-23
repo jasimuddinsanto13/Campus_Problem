@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
-import { API_BASE_URL } from '../lib/api';
+import { apiUrl } from '../lib/api';
 import Avatar from './Avatar';
 import ConfirmDialog from './ConfirmDialog';
 import {
@@ -21,8 +21,6 @@ import {
   MealIcon,
   BusIcon,
 } from './Icons';
-
-const LOGOUT_URL = `${API_BASE_URL}/accounts/logout/`;
 
 function clearClientAuth() {
   window.localStorage.clear();
@@ -96,14 +94,23 @@ export default function Sidebar({ variant = 'admin', collapsed, mobileOpen = fal
   // Logout confirmation — an accidental click no longer ends the session.
   // The styled ConfirmDialog asks first; only "Yes, Logout" navigates to
   // /accounts/logout/. The <a> keeps its href as a no-JS fallback.
+  const navigate = useNavigate();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const handleLogout = (e) => {
     e.preventDefault();
     setLogoutOpen(true);
   };
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     clearClientAuth();
-    window.location.replace(LOGOUT_URL);
+    try {
+      await fetch(apiUrl('/api/auth/logout/'), {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Ignore network errors — clear local state regardless.
+    }
+    navigate('/login', { replace: true });
   };
 
   const ArrowIcon = collapsed ? ChevronRightIcon : ChevronLeftIcon;
@@ -220,7 +227,7 @@ export default function Sidebar({ variant = 'admin', collapsed, mobileOpen = fal
         }`}
       >
         <a
-          href={LOGOUT_URL}
+          href="/login"
           title="Log out"
           onClick={handleLogout}
           className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 transition-all duration-200 hover:bg-rose-50 hover:text-rose-600 ${

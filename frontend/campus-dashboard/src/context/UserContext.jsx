@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { apiUrl } from '../lib/api';
 
 const UserContext = createContext(null);
 
@@ -44,8 +45,8 @@ export function UserProvider({ children }) {
   // On page load, fetch the persisted profile from GET /api/profile/.
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/profile/', {
-      credentials: 'same-origin',
+    fetch(apiUrl('/api/profile/'), {
+      credentials: 'include',
       headers: { Accept: 'application/json' },
     })
       .then((res) => (res.ok ? res.json() : null))
