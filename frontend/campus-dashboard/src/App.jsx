@@ -26,6 +26,10 @@ import BusNavigate from './pages/BusNavigate';
 import { apiUrl } from './lib/api';
 import { getCsrfToken } from './lib/csrf';
 
+const DEPARTMENTS = ['CSE', 'EEE', 'TE', 'IPE', 'FDAE'];
+const SECTIONS = { CSE: ['A', 'B'], EEE: ['A'], TE: ['A', 'B', 'C', 'D'], IPE: ['A', 'B'], FDAE: ['A'] };
+const BATCHES = Array.from({ length: 17 }, (_, i) => String(i));
+
 const SIDEBAR_W = { expanded: 272, collapsed: 84 };
 
 // Each role lands on its own portal after login (mirrors the Django
@@ -187,6 +191,169 @@ function LoginPage() {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-gray-600">
+          Don’t have an account?{' '}
+          <a href="/register" className="font-semibold text-lime-deep hover:underline">
+            Sign up
+          </a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RegisterPage() {
+  const navigate = useNavigate();
+  const { updateProfile } = useUser();
+  const [form, setForm] = useState({
+    full_name: '', email: '', password: '', confirm_password: '',
+    role: 'student', campus_id: '', admin_key: '',
+    department: 'CSE', batch: '0', section: 'A',
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const res = await fetch(apiUrl('/api/auth/register/'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Registration failed.'); return; }
+      // Admin is auto-approved and logged in; redirect to dashboard.
+      if (data.ok && data.profile) {
+        const p = data.profile;
+        updateProfile({
+          id: p.id, fullName: p.full_name || '', username: p.username || '',
+          email: p.email || '', role: p.role || form.role,
+          department: p.department || '', batch: p.batch || '', section: p.section || '',
+          isCr: !!p.is_cr, profilePicture: p.profile_picture || null,
+        });
+        const roleHome = { admin: '/admin/dashboard', teacher: '/faculty/dashboard', student: '/student/dashboard' };
+        navigate(roleHome[p.role || form.role] || '/student/dashboard');
+        return;
+      }
+      // Student/faculty pending approval.
+      setSuccess(data.message || 'Registration successful! Please wait for admin approval, then log in.');
+      setTimeout(() => navigate('/login'), 3000);
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const isStudent = form.role === 'student';
+  const isAdmin = form.role === 'admin';
+  const validSections = SECTIONS[form.department] || ['A'];
+
+  return (
+    <div className="grid min-h-[60vh] place-items-center px-4 py-8">
+      <div className="w-full max-w-md rounded-3xl border border-black/5 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+        <div className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-full bg-lime text-2xl font-black text-charcoal shadow-sm shadow-lime/40">
+          CP
+        </div>
+        <h1 className="text-center text-3xl font-black tracking-tight text-charcoal">Create account</h1>
+        <p className="mt-3 text-center text-sm text-gray-600">Join the campus platform</p>
+
+        {error && <div className="mt-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+        {success && <div className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>}
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Full Name</label>
+            <input type="text" value={form.full_name} onChange={set('full_name')}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30" required />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
+            <input type="email" value={form.email} onChange={set('email')}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30" required />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">I am a</label>
+            <select value={form.role} onChange={set('role')}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30">
+              <option value="student">Student</option>
+              <option value="teacher">Faculty</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          {!isAdmin && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                {isStudent ? 'Student ID' : 'Faculty ID'}
+              </label>
+              <input type="text" value={form.campus_id} onChange={set('campus_id')}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30" required />
+            </div>
+          )}
+          {isAdmin && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Admin Security Key</label>
+              <input type="password" value={form.admin_key} onChange={set('admin_key')}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30" required />
+            </div>
+          )}
+          {isStudent && (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Department</label>
+                <select value={form.department} onChange={set('department')}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30">
+                  {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Batch</label>
+                  <select value={form.batch} onChange={set('batch')}
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30">
+                    {BATCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Section</label>
+                  <select value={form.section} onChange={set('section')}
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30">
+                    {validSections.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
+            <input type="password" value={form.password} onChange={set('password')}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30"
+              placeholder="Min 8 characters" required />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Confirm Password</label>
+            <input type="password" value={form.confirm_password} onChange={set('confirm_password')}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-lime focus:ring-2 focus:ring-lime/30" required />
+          </div>
+          <button type="submit" disabled={loading}
+            className="w-full rounded-xl bg-lime px-4 py-3 text-sm font-semibold text-charcoal transition hover:brightness-95 disabled:opacity-50">
+            {loading ? 'Creating account...' : 'Sign up'}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-gray-600">
+          Already have an account?{' '}
+          <a href="/login" className="font-semibold text-lime-deep hover:underline">Sign in</a>
+        </p>
       </div>
     </div>
   );
@@ -248,6 +415,7 @@ export default function App() {
             {/* Entry point + legacy admin URLs (bookmarks keep working) */}
             <Route path="/" element={<RoleHomeRedirect />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
             <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="/users" element={<Navigate to="/admin/users" replace />} />
             <Route path="/routines" element={<Navigate to="/admin/routines" replace />} />

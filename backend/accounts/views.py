@@ -358,6 +358,100 @@ def api_logout(request):
     return JsonResponse({'ok': True})
 
 
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_register(request):
+    """JSON registration endpoint for the React SPA.
+
+    Accepts JSON body: { full_name, email, password, role, campus_id,
+    admin_key, department, batch, section }
+    Students & faculty are created as pending; admins require a valid passkey.
+    """
+    try:
+        payload = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'error': 'Invalid JSON.'}, status=400)
+
+    full_name = (payload.get('full_name') or '').strip()
+    email = (payload.get('email') or '').strip().lower()
+    password = payload.get('password', '')
+    role = payload.get('role', '')
+    campus_id = (payload.get('campus_id') or '').strip()
+    admin_key = (payload.get('admin_key') or '').strip()
+    department = (payload.get('department') or '').strip().upper()
+    batch = (payload.get('batch') or '').strip()
+    section = (payload.get('section') or '').strip().upper()
+    is_admin = role == User.Role.ADMIN
+
+    # --- Validation (mirrors the HTML register view) ---
+    valid_email = True
+    try:
+        validate_email(email)
+    except ValidationError:
+        valid_email = False
+
+    if not full_name or not email or not password:
+        return JsonResponse({'error': 'All fields are required.'}, status=400)
+    if not valid_email:
+        return JsonResponse({'error': 'Enter a valid email address.'}, status=400)
+    if role not in ROLE_LABELS:
+        return JsonResponse({'error': 'Please choose a valid role.'}, status=400)
+    if len(password) < 8:
+        return JsonResponse({'error': 'Password must be at least 8 characters.'}, status=400)
+    if is_admin and not admin_key:
+        return JsonResponse({'error': 'The admin security key is required.'}, status=400)
+    if not is_admin and not campus_id:
+        return JsonResponse({'error': 'Please enter your student or faculty ID.'}, status=400)
+    if role == User.Role.STUDENT and department not in ROUTINE_DEPARTMENTS:
+        return JsonResponse({'error': 'Please choose your department.'}, status=400)
+    if role == User.Role.STUDENT and batch not in ROUTINE_BATCHES:
+        return JsonResponse({'error': 'Please choose a valid batch (0-16).'}, status=400)
+    if role == User.Role.STUDENT and section not in ROUTINE_SECTIONS_BY_DEPT.get(department, []):
+        return JsonResponse({'error': f'Please choose a valid section for {department}.'}, status=400)
+    if User.objects.filter(username=email).exists() or User.objects.filter(email=email).exists():
+        return JsonResponse({'error': 'An account with this email already exists.'}, status=409)
+    if not is_admin and User.objects.filter(campus_id=campus_id).exists():
+        return JsonResponse({'error': 'This campus ID is already registered.'}, status=409)
+    if is_admin and not _valid_admin_passkey(admin_key):
+        return JsonResponse({'error': 'Invalid admin security key.'}, status=403)
+
+    user = User(
+        username=email,
+        email=email,
+        first_name=full_name,
+        campus_id=None if is_admin else campus_id,
+        department=department if role == User.Role.STUDENT else '',
+        batch=batch if role == User.Role.STUDENT else '',
+        section=section if role == User.Role.STUDENT else '',
+        role=role,
+        registration_status=(
+            User.RegistrationStatus.APPROVED if is_admin else User.RegistrationStatus.PENDING
+        ),
+        is_active=is_admin,
+        is_staff=is_admin,
+    )
+    user.set_password(password)
+    try:
+        with transaction.atomic():
+            user.save()
+            RegistrationRequest.objects.create(
+                user=user,
+                full_name=full_name,
+                email=email,
+                campus_id=campus_id or '',
+                role=role,
+                status=user.registration_status,
+            )
+    except IntegrityError:
+        return JsonResponse({'error': 'This email or campus ID is already in use.'}, status=409)
+
+    if is_admin:
+        login(request, user, backend=AUTH_BACKEND)
+        return JsonResponse({'ok': True, 'profile': _profile_payload(user, request)})
+
+    return JsonResponse({'ok': True, 'pending': True, 'message': 'Registration successful. Please wait for admin approval.'})
+
+
 @login_required
 def dashboard(request):
     """Landing page after login — sends each role to its own portal."""
