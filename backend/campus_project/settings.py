@@ -1,11 +1,13 @@
 """
 Django settings for campus_project.
 
-Combines two apps on a shared PostgreSQL database (Cloud SQL)
-  - issues  : Campus Problem issue tracker (ported from the original Flask app)
+Combines two apps on a shared database:
+  - issues  : Campus Problem issue tracker
   - booking : NITER-Pulse Smart Classroom Discovery & Room Booking system
 
-PostgreSQL (Cloud SQL).
+Environment-based configuration:
+  - LOCAL DEV: SQLite3, DEBUG=True, insecure secret key
+  - PRODUCTION (PythonAnywhere): env vars required for SECRET_KEY and DEBUG
 """
 
 import logging
@@ -16,22 +18,24 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# ---------------------------------------------------------------------------
+# Path setup
+# ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables from .env (DB credentials, secret key, API URL).
-load_dotenv(BASE_DIR / '.env', override=True)
+# Load .env file for local development (ignored on PythonAnywhere where
+# env vars are set via the Web tab).
+# override=False so that env vars set on PythonAnywhere's Web tab
+# take priority over the local .env file.
+load_dotenv(BASE_DIR / '.env', override=False)
 
 
-# --- Firebase Cloud Messaging (optional: Web Push notifications) ---
-# Initialize the Firebase Admin SDK from backend/serviceAccountKey.json (or
-# FIREBASE_CRED_PATH) when present. Push is strictly optional — without the
-# credential file the app runs identically, minus OS-level notifications.
-# booking.fcm reuses this app when it exists and lazily initializes its own
-# otherwise, so the two init paths never conflict.
+# ---------------------------------------------------------------------------
+# Firebase Cloud Messaging (optional: Web Push notifications)
+# ---------------------------------------------------------------------------
 try:
     import firebase_admin
-except ImportError:  # firebase-admin not installed — push disabled
+except ImportError:
     firebase_admin = None
 
 FIREBASE_CRED_PATH = (
@@ -44,7 +48,6 @@ if (
 ):
     try:
         from firebase_admin import credentials
-
         firebase_admin.initialize_app(credentials.Certificate(FIREBASE_CRED_PATH))
     except (ValueError, OSError):
         logger.warning(
@@ -53,56 +56,69 @@ if (
         )
 
 
-# SECURITY WARNING: keep the secret key used in production secret!
+# ---------------------------------------------------------------------------
+# Security: SECRET_KEY and DEBUG from environment variables
+# ---------------------------------------------------------------------------
+# In production (PythonAnywhere) these MUST be set as environment variables.
+# In local dev the defaults below keep things working out of the box.
 SECRET_KEY = os.environ.get(
     'DJANGO_SECRET_KEY',
+    # Fallback: insecure key for LOCAL DEVELOPMENT ONLY.
+    # In production, this fallback is never reached because the env var is
+    # required (see the check below).
     'django-insecure-(#zsspo27-4=la^jg!sifk824mkrzyl!%t@+px&-x*@majzb64',
 )
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = [host.strip() for host in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')]
-# Cloud Run auto-sets a hostname; allow it.
-cloud_run_host = os.environ.get('K_SERVICE', '')  # e.g. "campus-backend"
+
+# ---------------------------------------------------------------------------
+# ALLOWED_HOSTS
+# ---------------------------------------------------------------------------
+# Set ALLOWED_HOSTS in your .env or PythonAnywhere environment variables.
+# Examples:
+#   ALLOWED_HOSTS=yourusername.pythonanywhere.com,localhost,127.0.0.1
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
+
+# Cloud Run auto-sets K_SERVICE — allow it if present.
+cloud_run_host = os.environ.get('K_SERVICE', '')
 if cloud_run_host:
     ALLOWED_HOSTS.append(cloud_run_host)
 
-# React is deployed on Vercel; the backend runs on Cloud Run.
-# FRONTEND_URL points to the Vercel deployment.
-FRONTEND_URL = os.environ.get(
-    'FRONTEND_URL',
-    'https://niter-contest.web.app',
-).rstrip('/')
+
+# ---------------------------------------------------------------------------
+# CORS / CSRF — production origins
+# ---------------------------------------------------------------------------
+FRONTEND_URL = os.environ.get('FRONTEND_URL', '').rstrip('/')
+
 CORS_ALLOWED_ORIGINS = {
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:8000',
     'http://127.0.0.1:5173',
     'http://127.0.0.1:8000',
-    # Legacy Render origins (kept during migration)
-    'https://campus-problem-frontend.onrender.com',
-    'https://campus-problem.onrender.com',
-    # Firebase Hosting
-    'https://niter-contest.web.app',
-    # Legacy Vercel
-    'https://campus-problem.vercel.app',
 }
 if FRONTEND_URL:
     CORS_ALLOWED_ORIGINS.add(FRONTEND_URL)
 
-CSRF_TRUSTED_ORIGINS = [origin for origin in CORS_ALLOWED_ORIGINS if origin.startswith('http')]
+CSRF_TRUSTED_ORIGINS = [
+    origin for origin in CORS_ALLOWED_ORIGINS if origin.startswith('http')
+]
 
-# Allow Django auth cookies to survive a cross-site redirect from the
-# Firebase Hosting frontend to the Cloud Run backend service.
+# Cookies: secure in production, relaxed in local dev.
 SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 CSRF_COOKIE_SECURE = not DEBUG
 
 
+# ---------------------------------------------------------------------------
 # Application definition
-
+# ---------------------------------------------------------------------------
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -151,11 +167,8 @@ WSGI_APPLICATION = 'campus_project.wsgi.application'
 
 
 # ---------------------------------------------------------------------------
-# Database — SQLite3 (default Django database).
-# Simple, zero-config, works great on PythonAnywhere and for local dev.
-# For production with heavy traffic, switch to PostgreSQL or MySQL.
+# Database — SQLite3
 # ---------------------------------------------------------------------------
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -163,12 +176,13 @@ DATABASES = {
     }
 }
 
-# The custom user model lives in the booking app (NITER-Pulse schema).
+# The custom user model lives in the booking app.
 AUTH_USER_MODEL = 'booking.User'
 
-# --- Role-based auth (accounts app) ---
-# Unapproved students/faculty are inactive, so the default login URL simply
-# bounces them back to the login page until an admin approves them.
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
@@ -177,88 +191,53 @@ LOGOUT_REDIRECT_URL = 'login'
 ADMIN_PASSKEY = os.environ.get('ADMIN_PASSKEY', 'CAMPUS-ADMIN-2026')
 
 
+# ---------------------------------------------------------------------------
 # Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
-
+# ---------------------------------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 
+# ---------------------------------------------------------------------------
 # Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
-
+# ---------------------------------------------------------------------------
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = os.environ.get('DJANGO_TIME_ZONE', 'Asia/Dhaka')
-
 USE_I18N = True
-
 USE_TZ = True
 
 
+# ---------------------------------------------------------------------------
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
-
+# ---------------------------------------------------------------------------
 STATIC_URL = 'static/'
-
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+# collectstatic gathers all static files here for production serving.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# User-uploaded media (profile pictures) — served by Django in DEBUG.
+# User-uploaded media (profile pictures)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 
+# ---------------------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Base URL of the backend API. On Cloud Run, K_SERVICE is set automatically.
-# The frontend proxies /api/* to the same origin via Firebase Hosting rewrites,
-# so an empty base URL (same-origin) works in production.
 API_BASE_URL = os.environ.get('API_BASE_URL', '').rstrip('/')
 
 
 # ---------------------------------------------------------------------------
-# Firestore — real-time notifications, caching, chat, and optional sessions.
-# Requires the google-cloud-firestore package (in requirements.txt) and
-# Application Default Credentials (implicit on Cloud Run, or set
-# GOOGLE_APPLICATION_CREDENTIALS locally).
+# Production safety check
 # ---------------------------------------------------------------------------
-FIRESTORE_COLLECTION_PREFIX = os.environ.get('FIRESTORE_COLLECTION_PREFIX', '')
-
-# Optional: use Firestore as the Django cache backend.
-# Set FIRESTORE_CACHE=1 in .env to enable; otherwise the default DB cache
-# (or the existing CacheControl setup) remains active.
-USE_FIRESTORE_CACHE = os.environ.get('FIRESTORE_CACHE', '').lower() in ('1', 'true', 'yes')
-if USE_FIRESTORE_CACHE:
-    CACHES = {
-        'default': {
-            'BACKEND': 'campus_project.firestore_cache.FirestoreCache',
-            'OPTIONS': {
-                'collection': f'{FIRESTORE_COLLECTION_PREFIX}django_cache'.lstrip('_'),
-                'TTL': int(os.environ.get('FIRESTORE_CACHE_TTL', '3600')),
-            },
-        }
-    }
-
-# Optional: use Firestore as the Django session backend.
-# Set SESSION_ENGINE=campus_project.firestore_session in .env to enable.
-# Default is the database-backed engine (db).
-Firestore_SESSION_ENGINE = 'campus_project.firestore_session'
-# Only activate if explicitly requested.
-if os.environ.get('SESSION_ENGINE') == Firestore_SESSION_ENGINE:
-    SESSION_ENGINE = Firestore_SESSION_ENGINE
+if not DEBUG and SECRET_KEY.startswith('django-insecure-'):
+    raise ValueError(
+        'DJANGO_SECRET_KEY must be set to a secure random value in production. '
+        'Set it as an environment variable on PythonAnywhere.'
+    )
