@@ -50,9 +50,6 @@ urlpatterns = [
     path('student/<path:subpath>', spa_views.student_portal),
     path('assets/<path:asset_path>', spa_views.spa_asset),
     path('accounts/', include('accounts.urls')),
-    # JSON API login/logout — used by the React SPA on a different origin.
-    path('api/auth/login/', accounts_views.api_login, name='api_login'),
-    path('api/auth/logout/', accounts_views.api_logout, name='api_logout'),
     # REST endpoints for the React dashboard (Settings + Users + Routines pages).
     path('api/profile/', accounts_views.profile_api, name='api_profile'),
     path('api/profile/fcm-token/', accounts_views.profile_fcm_token_api, name='api_profile_fcm_token'),
