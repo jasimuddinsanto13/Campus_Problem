@@ -151,32 +151,15 @@ WSGI_APPLICATION = 'campus_project.wsgi.application'
 
 
 # ---------------------------------------------------------------------------
-# Database — PostgreSQL on Cloud SQL (Cloud Run) or local dev.
-# psycopg2 is the production driver (see requirements.txt).
-#
-# On Cloud Run the DB_SOCKET_PATH env var is set to the Cloud SQL auth
-# proxy Unix socket (e.g. /cloudsql/PROJECT:REGION:INSTANCE). When present
-# the driver connects over the socket — faster and no open TCP port needed.
+# Database — SQLite3 (default Django database).
+# Simple, zero-config, works great on PythonAnywhere and for local dev.
+# For production with heavy traffic, switch to PostgreSQL or MySQL.
 # ---------------------------------------------------------------------------
-
-_DB_SOCKET = os.environ.get('DB_SOCKET_PATH', '')
-
-# Build DB OPTIONS dict (supports both Cloud SQL socket and schema override).
-_DB_OPTIONS: dict = {}
-if _DB_SOCKET:
-    _DB_OPTIONS['unix_socket'] = _DB_SOCKET
-if os.environ.get('DB_SCHEMA'):
-    _DB_OPTIONS['options'] = f"-c search_path={os.environ['DB_SCHEMA']}"
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'campus_problem'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
-        **(({'OPTIONS': _DB_OPTIONS}) if _DB_OPTIONS else {}),
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
