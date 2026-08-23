@@ -1,10 +1,12 @@
 const configuredApiUrl = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
 
-// The frontend and backend are deployed on different Render hosts in production.
-// Use the backend service URL explicitly, not the frontend origin.
+// In dev mode, the Vite proxy forwards /api/* to the local Django backend.
+// In production (Vercel), rewrites in vercel.json proxy API paths to Cloud Run
+// on the same origin, so an empty base URL (same-origin) works.
+// For other deployments, set VITE_API_URL to the backend URL.
 export const API_BASE_URL = (
   configuredApiUrl ||
-  (import.meta.env.DEV ? 'http://127.0.0.1:8001' : 'https://campus-problem.onrender.com')
+  (import.meta.env.DEV ? 'http://127.0.0.1:8002' : '')
 ).replace(/\/+$/, '');
 
 export function apiUrl(input) {
