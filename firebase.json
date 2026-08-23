@@ -1,0 +1,92 @@
+{
+  "hosting": {
+    "public": "frontend/campus-dashboard/dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "campus-backend",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/accounts/**",
+        "run": {
+          "serviceId": "campus-backend",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/django-admin/**",
+        "run": {
+          "serviceId": "campus-backend",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/booking/**",
+        "run": {
+          "serviceId": "campus-backend",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/issues/**",
+        "run": {
+          "serviceId": "campus-backend",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/portal/**",
+        "run": {
+          "serviceId": "campus-backend",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/media/**",
+        "run": {
+          "serviceId": "campus-backend",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/static/**",
+        "run": {
+          "serviceId": "campus-backend",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/assets/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/api/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ]
+  }
+}

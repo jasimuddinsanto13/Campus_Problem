@@ -33,6 +33,7 @@ from PIL import Image
 
 from booking.fcm import push_urgent_notice
 from booking.models import Notice, User
+from campus_project.firestore_notifications import create_notification
 
 # Departments an admin may target (matches the routine manager / wizard).
 DEPARTMENTS = ['CSE', 'EEE', 'TE', 'IPE', 'FDAE']
@@ -270,6 +271,27 @@ def notices_api(request):
         if notice.priority == Notice.Priority.URGENT
         else 0
     )
+
+    # Write to Firestore for real-time in-app notification feed.
+    target_roles = []
+    if notice.target_role == Notice.TargetRole.STUDENT:
+        target_roles = ['student']
+    elif notice.target_role == Notice.TargetRole.FACULTY:
+        target_roles = ['teacher']
+    else:
+        target_roles = ['student', 'teacher']
+    create_notification(
+        title=notice.title,
+        body=notice.content[:500],
+        url='/notices',
+        target_roles=target_roles,
+        department=notice.department or None,
+        batch=notice.batch or None,
+        section=notice.section or None,
+        priority=notice.priority,
+        created_by_uid=str(request.user.uid),
+    )
+
     return JsonResponse(
         {'ok': True, 'notice': _notice_payload(notice, request),
          'message': 'Notice published.', 'push_targeted': push_targeted},
@@ -394,5 +416,24 @@ def notice_detail_api(request, notice_id):
     # Editing a notice to URGENT fires the push to its (new) audience too.
     if not was_urgent and notice.priority == Notice.Priority.URGENT:
         push_urgent_notice(notice)
+        # Also write Firestore notification for the edited urgent notice.
+        target_roles = []
+        if notice.target_role == Notice.TargetRole.STUDENT:
+            target_roles = ['student']
+        elif notice.target_role == Notice.TargetRole.FACULTY:
+            target_roles = ['teacher']
+        else:
+            target_roles = ['student', 'teacher']
+        create_notification(
+            title=notice.title,
+            body=notice.content[:500],
+            url='/notices',
+            target_roles=target_roles,
+            department=notice.department or None,
+            batch=notice.batch or None,
+            section=notice.section or None,
+            priority='urgent',
+            created_by_uid=str(request.user.uid),
+        )
 
     return JsonResponse({'ok': True, 'notice': _notice_payload(notice, request)})

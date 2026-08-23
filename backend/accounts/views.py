@@ -17,6 +17,7 @@ were deprecated and their landing routes now redirect to '/'.
 """
 
 import json
+import logging
 import os
 from datetime import time
 
@@ -38,6 +39,7 @@ from booking.fcm import clean_token, register_device_token
 from booking.models import AdminPasskey, MealCancellation, RegistrationRequest, Room, RoutineSlot
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _valid_admin_passkey(passkey):
@@ -192,17 +194,30 @@ def register(request):
         user.set_password(password)
         # The account and its audit row are created atomically, so we never
         # end up with a login account that has no registration-request record.
-        with transaction.atomic():
-            user.save()
-            # Admins are approved on the spot; students/faculty stay pending.
-            RegistrationRequest.objects.create(
-                user=user,
-                full_name=full_name,
-                email=email,
-                campus_id=campus_id or '',
-                role=role,
-                status=user.registration_status,
-            )
+        try:
+            with transaction.atomic():
+                user.save()
+                # Admins are approved on the spot; students/faculty stay pending.
+                RegistrationRequest.objects.create(
+                    user=user,
+                    full_name=full_name,
+                    email=email,
+                    campus_id=campus_id or '',
+                    role=role,
+                    status=user.registration_status,
+                )
+        except IntegrityError:
+            logger.exception('Registration failed due to a DB integrity conflict.')
+            request.session['register_error'] = 'This email or campus ID is already in use. Please try again.'
+            request.session['register_data'] = {
+                'full_name': full_name,
+                'campus_id': campus_id,
+                'email': email,
+                'department': department,
+                'batch': batch,
+                'section': section,
+            }
+            return redirect('register')
 
         if is_admin:
             login(request, user, backend=AUTH_BACKEND)

@@ -8,7 +8,7 @@ from .models import Issue
 
 @login_required
 def index(request):
-    """Render the Campus Problem issue desk with data read from MySQL."""
+    """Render the Campus Problem issue desk with data read from PostgreSQL."""
     issues = Issue.objects.all().order_by('-created_at')
     summary = {
         'total': issues.count(),

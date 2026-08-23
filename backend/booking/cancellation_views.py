@@ -24,6 +24,7 @@ from django.views.decorators.http import require_http_methods
 
 from booking.fcm import clean_token, push_class_cancellation, register_device_token
 from booking.models import ClassCancellation, DeviceToken, Notice, User
+from campus_project.firestore_notifications import create_notification
 
 # Departments an admin may target (matches the routine manager / wizard).
 DEPARTMENTS = ['CSE', 'EEE', 'TE', 'IPE', 'FDAE']
@@ -230,6 +231,21 @@ def cancel_class_api(request):
     notified = matched.count()
     # OS-level push to the matched students' registered devices (best-effort).
     push_class_cancellation(cancellation, list(matched.values_list('id', flat=True)))
+
+    # Also write to Firestore for real-time in-app notification feed.
+    student_uids = list(matched.values_list('uid', flat=True))
+    create_notification(
+        title=f'🚨 Class Cancelled: {cancellation.course_code}',
+        body=(
+            f'Your {cancellation.start_time.strftime("%I:%M %p").lstrip("0")} – '
+            f'{cancellation.end_time.strftime("%I:%M %p").lstrip("0")} class today '
+            f'has been cancelled by {_author_name(cancellation.faculty)}.'
+        ),
+        url='/student/cancellations',
+        target_user_ids=student_uids,
+        priority='urgent',
+        created_by_uid=str(cancellation.faculty.uid),
+    )
 
     return JsonResponse({
         'ok': True,

@@ -1,9 +1,5 @@
 """campus_project package.
 
-Registers PyMySQL as the MySQLdb driver so Django can use the
-django.db.backends.mysql backend on Windows without compiling mysqlclient.
+PostgreSQL is the production database (Cloud SQL).  No driver shim needed —
+Django's built-in django.db.backends.postgresql uses psycopg2 directly.
 """
-
-import pymysql
-
-pymysql.install_as_MySQLdb()

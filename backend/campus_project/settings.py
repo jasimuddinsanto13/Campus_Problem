@@ -1,11 +1,11 @@
 """
 Django settings for campus_project.
 
-Combines two apps on a shared MySQL database:
+Combines two apps on a shared PostgreSQL database (Cloud SQL)
   - issues  : Campus Problem issue tracker (ported from the original Flask app)
   - booking : NITER-Pulse Smart Classroom Discovery & Room Booking system
 
-FastAPI (the `api` package) exposes the REST API against the same MySQL database.
+PostgreSQL (Cloud SQL).
 """
 
 import logging
@@ -63,42 +63,38 @@ SECRET_KEY = os.environ.get(
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')]
-render_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-if render_hostname:
-    ALLOWED_HOSTS.append(render_hostname)
+# Cloud Run auto-sets a hostname; allow it.
+cloud_run_host = os.environ.get('K_SERVICE', '')  # e.g. "campus-backend"
+if cloud_run_host:
+    ALLOWED_HOSTS.append(cloud_run_host)
 
-# React is deployed separately from Django on Render. Keep local Vite origins
-# available and add the deployed frontend through FRONTEND_URL.
+# React is deployed on Vercel; the backend runs on Cloud Run.
+# FRONTEND_URL points to the Vercel deployment.
 FRONTEND_URL = os.environ.get(
     'FRONTEND_URL',
-    'https://campus-problem-frontend.onrender.com',
+    'https://niter-contest.web.app',
 ).rstrip('/')
-RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL', '').rstrip('/')
 CORS_ALLOWED_ORIGINS = {
+    'http://localhost:5173',
+    'http://localhost:5174',
     'http://localhost:8000',
+    'http://127.0.0.1:5173',
     'http://127.0.0.1:8000',
-    'http://localhost:8002',
-    'http://127.0.0.1:8002',
+    # Legacy Render origins (kept during migration)
     'https://campus-problem-frontend.onrender.com',
     'https://campus-problem.onrender.com',
+    # Firebase Hosting
+    'https://niter-contest.web.app',
+    # Legacy Vercel
+    'https://campus-problem.vercel.app',
 }
-for origin in (FRONTEND_URL, RENDER_EXTERNAL_URL):
-    if origin:
-        CORS_ALLOWED_ORIGINS.add(origin)
+if FRONTEND_URL:
+    CORS_ALLOWED_ORIGINS.add(FRONTEND_URL)
 
 CSRF_TRUSTED_ORIGINS = [origin for origin in CORS_ALLOWED_ORIGINS if origin.startswith('http')]
-if RENDER_EXTERNAL_URL:
-    CSRF_TRUSTED_ORIGINS.append(RENDER_EXTERNAL_URL)
-if FRONTEND_URL:
-    CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)
-if render_hostname:
-    CSRF_TRUSTED_ORIGINS.extend([
-        f'https://{render_hostname}',
-        f'http://{render_hostname}',
-    ])
 
-# Allow Django auth cookies to survive a cross-site redirect from the Render
-# static frontend to the Render backend service while keeping the session secure.
+# Allow Django auth cookies to survive a cross-site redirect from the
+# Firebase Hosting frontend to the Cloud Run backend service.
 SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
@@ -155,42 +151,32 @@ WSGI_APPLICATION = 'campus_project.wsgi.application'
 
 
 # ---------------------------------------------------------------------------
-# Database — MySQL 8 on Aiven Cloud (credentials come from .env).
-# PyMySQL is used as the MySQLdb driver (see campus_project/__init__.py).
-# Aiven enforces TLS; we use ssl_verify_cert=False because Aiven's CA is
-# self-signed and not in the system cert store.  TLS transport is still on.
+# Database — PostgreSQL on Cloud SQL (Cloud Run) or local dev.
+# psycopg2 is the production driver (see requirements.txt).
+#
+# On Cloud Run the DB_SOCKET_PATH env var is set to the Cloud SQL auth
+# proxy Unix socket (e.g. /cloudsql/PROJECT:REGION:INSTANCE). When present
+# the driver connects over the socket — faster and no open TCP port needed.
 # ---------------------------------------------------------------------------
 
-_DB_SSL_CA = os.environ.get('DB_SSL_CA', '')
-_DB_SSL_OPTS = {}
-if _DB_SSL_CA:
-    import pathlib
-    _ca_path = pathlib.Path(_DB_SSL_CA)
-    if not _ca_path.is_absolute():
-        _ca_path = BASE_DIR / _ca_path
-    if _ca_path.exists():
-        _DB_SSL_OPTS = {
-            'ssl': {
-                'ca': str(_ca_path),
-            },
-        }
-    else:
-        logger.warning(
-            'DB_SSL_CA path %s not found — SSL disabled for Django.', _ca_path,
-        )
+_DB_SOCKET = os.environ.get('DB_SOCKET_PATH', '')
+
+# Build DB OPTIONS dict (supports both Cloud SQL socket and schema override).
+_DB_OPTIONS: dict = {}
+if _DB_SOCKET:
+    _DB_OPTIONS['unix_socket'] = _DB_SOCKET
+if os.environ.get('DB_SCHEMA'):
+    _DB_OPTIONS['options'] = f"-c search_path={os.environ['DB_SCHEMA']}"
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
+        'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.environ.get('DB_NAME', 'campus_problem'),
-        'USER': os.environ.get('DB_USER', 'root'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
         'PASSWORD': os.environ.get('DB_PASSWORD', ''),
         'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
-        'PORT': os.environ.get('DB_PORT', '3306'),
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-            **_DB_SSL_OPTS,
-        },
+        'PORT': os.environ.get('DB_PORT', '5432'),
+        **(({'OPTIONS': _DB_OPTIONS}) if _DB_OPTIONS else {}),
     }
 }
 
@@ -257,5 +243,39 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Base URL of the FastAPI REST layer that the front-end JavaScript calls.
-API_BASE_URL = os.environ.get('API_BASE_URL', 'http://127.0.0.1:8001').rstrip('/')
+# Base URL of the backend API. On Cloud Run, K_SERVICE is set automatically.
+# The frontend proxies /api/* to the same origin via Firebase Hosting rewrites,
+# so an empty base URL (same-origin) works in production.
+API_BASE_URL = os.environ.get('API_BASE_URL', '').rstrip('/')
+
+
+# ---------------------------------------------------------------------------
+# Firestore — real-time notifications, caching, chat, and optional sessions.
+# Requires the google-cloud-firestore package (in requirements.txt) and
+# Application Default Credentials (implicit on Cloud Run, or set
+# GOOGLE_APPLICATION_CREDENTIALS locally).
+# ---------------------------------------------------------------------------
+FIRESTORE_COLLECTION_PREFIX = os.environ.get('FIRESTORE_COLLECTION_PREFIX', '')
+
+# Optional: use Firestore as the Django cache backend.
+# Set FIRESTORE_CACHE=1 in .env to enable; otherwise the default DB cache
+# (or the existing CacheControl setup) remains active.
+USE_FIRESTORE_CACHE = os.environ.get('FIRESTORE_CACHE', '').lower() in ('1', 'true', 'yes')
+if USE_FIRESTORE_CACHE:
+    CACHES = {
+        'default': {
+            'BACKEND': 'campus_project.firestore_cache.FirestoreCache',
+            'OPTIONS': {
+                'collection': f'{FIRESTORE_COLLECTION_PREFIX}django_cache'.lstrip('_'),
+                'TTL': int(os.environ.get('FIRESTORE_CACHE_TTL', '3600')),
+            },
+        }
+    }
+
+# Optional: use Firestore as the Django session backend.
+# Set SESSION_ENGINE=campus_project.firestore_session in .env to enable.
+# Default is the database-backed engine (db).
+Firestore_SESSION_ENGINE = 'campus_project.firestore_session'
+# Only activate if explicitly requested.
+if os.environ.get('SESSION_ENGINE') == Firestore_SESSION_ENGINE:
+    SESSION_ENGINE = Firestore_SESSION_ENGINE

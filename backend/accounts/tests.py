@@ -1,8 +1,10 @@
 import json
 import os
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
 
@@ -1148,6 +1150,27 @@ class AdminPasskeyRegistrationTests(TestCase):
         self.assertNotContains(refreshed, 'Registration submitted')
         self.assertNotContains(refreshed, 'already exists')
         self.assertEqual(User.objects.filter(username='stu@niter.local').count(), 1)
+
+    def test_registration_integrity_error_redirects_without_500(self):
+        """Duplicate unique-key races should show a friendly redirect instead of
+        crashing with a 500."""
+        with mock.patch.object(User, 'save', side_effect=IntegrityError('duplicate')):
+            response = self.client.post(reverse('register'), {
+                'full_name': 'Duplicate User',
+                'email': 'duplicate@niter.local',
+                'campus_id': 'CSE-77777',
+                'department': 'CSE',
+                'batch': '12',
+                'section': 'A',
+                'password': 'strongpass123',
+                'confirm_password': 'strongpass123',
+                'role': 'student',
+            })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('register'))
+        page = self.client.get(reverse('register'))
+        self.assertContains(page, 'already in use')
 
     def test_student_registration_requires_department_batch_section(self):
         """Students must pick a department, a batch (0-16) and a section that

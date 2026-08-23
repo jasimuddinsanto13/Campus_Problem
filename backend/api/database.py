@@ -1,7 +1,7 @@
 """SQLAlchemy engine and session management for the FastAPI layer.
 
-Configures a connection-pooled, SSL-aware engine suitable for Aiven Cloud
-MySQL.  pool_pre_ping detects stale connections automatically so the app
+Configures a connection-pooled engine for Cloud SQL PostgreSQL.
+pool_pre_ping detects stale connections automatically so the app
 reconnects transparently after network blinks or server-side timeouts.
 """
 

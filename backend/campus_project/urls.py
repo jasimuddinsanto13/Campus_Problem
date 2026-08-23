@@ -19,6 +19,7 @@ from booking import admin_booking_views
 from booking import api_views as booking_api_views
 from booking import cancellation_views
 from booking import notice_views
+from booking import firestore_notification_views
 from issues import api_views as issues_api_views
 
 # React dashboard portals — serves the built SPA in frontend/campus-dashboard/dist
@@ -87,6 +88,11 @@ urlpatterns = [
     # FCM push-subscription registration (web/mobile device tokens).
     path('api/push/subscribe/', cancellation_views.push_subscribe_api, name='api_push_subscribe'),
     path('api/push/unsubscribe/', cancellation_views.push_unsubscribe_api, name='api_push_unsubscribe'),
+    # Firestore-backed real-time notifications.
+    path('api/notifications/', firestore_notification_views.notification_list, name='api_notification_list'),
+    path('api/notifications/unread-count/', firestore_notification_views.notification_unread_count, name='api_notification_unread_count'),
+    path('api/notifications/read-all/', firestore_notification_views.notification_mark_all_read, name='api_notification_mark_all_read'),
+    path('api/notifications/<str:notification_id>/read/', firestore_notification_views.notification_mark_read, name='api_notification_mark_read'),
     # AI chat assistant — same-origin proxy to the FastAPI Gemini endpoints
     # (chat, voice transcription, and text-to-speech).
     path('api/chat', spa_views.chat_proxy, name='api_chat'),
